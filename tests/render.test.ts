@@ -31,6 +31,13 @@ describe('brainstorm text layout', () => {
     expect(growText(label, ctx).height).toBe(400);
     expect(growText({ ...label, text: 'Hello' }, ctx, label).height).toBe(400);
   });
+  it('reflows automatic label height when widening without a vertical resize', () => {
+    const label = growText({ ...makeShape('text', 0, 0), width: 48 }, ctx);
+    const wider = growText({ ...label, width: 400 }, ctx, label);
+    expect(wider.height).toBeLessThan(label.height);
+    expect(wider.height).toBe(51);
+    expect(growText({ ...label, height: 600 }, ctx).height).toBe(600);
+  });
   it('wraps long words and preserves explicit blank lines', () => {
     expect(wrap('abcdef\n\nhi', 24, s => s.length * 8)).toEqual(['abc', 'def', '', 'hi']);
   });

@@ -176,7 +176,7 @@ export default function App() {
     if (!d.changed) return;
     if (d.type === 'pan') setView({ ...d.view, x: d.view.x + screen.x - d.screen.x, y: d.view.y + screen.y - d.screen.y });
     else if (d.type === 'move') updateScene({ ...d.scene, nodes: d.scene.nodes.map(n => d.ids.includes(n.id) ? { ...n, x: Math.round((n.x + dx) / 8) * 8, y: Math.round((n.y + dy) / 8) * 8 } : n) });
-    else if (d.type === 'resize') updateScene({ ...d.scene, nodes: d.scene.nodes.map(n => d.ids.includes(n.id) ? fitText({ ...n, width: Math.max(48, Math.round((n.width + dx) / 8) * 8), height: Math.max(40, Math.round((n.height + dy) / 8) * 8) }) : n) });
+    else if (d.type === 'resize') updateScene({ ...d.scene, nodes: d.scene.nodes.map(n => d.ids.includes(n.id) ? fitText({ ...n, width: Math.max(48, Math.round((n.width + dx) / 8) * 8), height: Math.abs(dy) < 3 ? n.height : Math.max(40, Math.round((n.height + dy) / 8) * 8) }, Math.abs(dy) < 3 ? n : undefined) : n) });
     else if (d.type === 'create' && latest.current) { const n = latest.current.nodes.find(n => n.id === d.ids[0]); if (!n) return; if (Math.abs(dx) > 6 || Math.abs(dy) > 6) updateScene({ ...d.scene, nodes: [...d.scene.nodes, fitText({ ...n, x: Math.min(d.start.x, d.start.x + dx), y: Math.min(d.start.y, d.start.y + dy), width: Math.max(48, Math.abs(dx)), height: Math.max(40, Math.abs(dy)) })] }); }
     else if (d.type === 'marquee') setMarquee({ a: d.start, b: p });
   };
