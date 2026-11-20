@@ -4,7 +4,7 @@ const title = (page: Page) => page.getByLabel('Board title');
 const saved = (page: Page) => expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
 async function create(page: Page, name: string) {
   await page.getByRole('button', { name: 'My boards', exact: true }).click();
-  await page.getByRole('button', { name: 'New board', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New board', exact: true }).click();
   await title(page).fill(name); await saved(page);
 }
 test('reload restores the last-open board per tab, not the newest board', async ({ page, context }) => {
