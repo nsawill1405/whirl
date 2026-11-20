@@ -18,7 +18,7 @@
 ## What works today
 
 - Infinite canvas with pan, zoom, fit-to-content, and light/dark themes.
-- Rectangles, ellipses, diamonds, sticky notes, text, and PNG/JPEG/WebP images.
+- Rectangles, ellipses, diamonds, sticky notes, text, and PNG/JPEG/WebP images, animated GIFs, and looping MP4/WebM/Ogg video (double-click or select and press Space to play/pause).
 - Select, shift-select, box-select, move, resize (bottom-right handle), recolor, duplicate, copy/paste, and undo/redo.
 - Persistent groups: select shapes and group them to select, move, resize, copy, or export together.
 - Attached orthogonal connectors that route around shapes, with editable labels.
@@ -54,7 +54,7 @@ Open `http://localhost:8080`. The production app is static, so you can also host
 
 ## Your data
 
-Boards save to **this browser on this origin**, not to a cloud account. Give the “Saved on this device” indicator a moment before closing a tab. Different browsers, hostnames, and devices have separate boards. Export JSON backups before clearing browser data, changing hosts, or switching devices. Storage failures are shown in the header; private browsing can limit persistence. Do not edit the same storage from several tabs at once. Image imports are embedded in your board and limited to 12 MB per file.
+Boards save to **this browser on this origin**, not to a cloud account. Give the “Saved on this device” indicator a moment before closing a tab. Different browsers, hostnames, and devices have separate boards. Export JSON backups before clearing browser data, changing hosts, or switching devices. Storage failures are shown in the header; private browsing can limit persistence. Do not edit the same storage from several tabs at once. Image imports are embedded in your board and limited to 12 MB per image (including GIFs); MP4/WebM/Ogg videos are embedded with a separate 25 MB per video limit.
 
 To move a board, choose **Export → Whirl board**, then import the JSON through the image/import tool or My boards. JSON preserves shapes, connectors, text, and embedded images; SVG/PNG are presentation formats. There are import limits (3,000 shapes / 6,000 connectors) to prevent accidentally loading unreasonable files. Very large or dense diagrams can slow routing; use several boards for large projects.
 

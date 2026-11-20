@@ -1,4 +1,63 @@
 import { bounds, edgeMiddle, route, type Scene, type Shape, type Point } from '@whirl/scene';
+type GifDecoder = { tracks: { ready: Promise<void>; selectedTrack: { frameCount: number } }; decode(options: { frameIndex: number }): Promise<{ image: VideoFrame }>; close(): void };
+type Gif = { decoder?: GifDecoder; frame?: VideoFrame; index: number; next: number; busy: boolean };
+const gifs = new Map<string, Gif>();
+function gifFrame(data: string, fallback: HTMLImageElement): CanvasImageSource {
+  const Decoder = (window as unknown as { ImageDecoder?: new (options: { data: ArrayBuffer; type: string }) => GifDecoder }).ImageDecoder;
+  if (!Decoder) return fallback;
+  let gif = gifs.get(data);
+  if (!gif) {
+    gif = { index: 0, next: 0, busy: true }; gifs.set(data, gif);
+    const state = gif;
+    void fetch(data).then(response => response.arrayBuffer()).then(async buffer => {
+      const decoder = new Decoder({ data: buffer, type: 'image/gif' });
+      await decoder.tracks.ready;
+      if (gifs.get(data) !== state) { decoder.close(); return; }
+      state.decoder = decoder; state.busy = false;
+    }).catch(() => { state.busy = true; });
+  }
+  if (gif.decoder && !gif.busy && performance.now() >= gif.next) {
+    const state = gif; state.busy = true;
+    void gif.decoder.decode({ frameIndex: gif.index }).then(({ image }) => {
+      if (gifs.get(data) !== state) { image.close(); return; }
+      state.frame?.close(); state.frame = image;
+      state.next = performance.now() + Math.max(20, (image.duration ?? 100000) / 1000);
+      state.index = (state.index + 1) % state.decoder!.tracks.selectedTrack.frameCount; state.busy = false;
+    }).catch(() => { state.busy = true; });
+  }
+  return gif.frame ?? fallback;
+}
+export function retainGifs(data: Set<string>) {
+  for (const [key, gif] of gifs) if (!data.has(key)) { gif.frame?.close(); gif.decoder?.close(); gifs.delete(key); }
+}
+export const videos = new Map<string, HTMLVideoElement>();
+export function getVideo(data: string) {
+  let video = videos.get(data);
+  if (!video) { video = document.createElement('video'); video.loop = true; video.playsInline = true; video.preload = 'auto'; video.src = data; videos.set(data, video); }
+  return video;
+}
+export function readyVideo(video: HTMLVideoElement): Promise<void> {
+  if (video.readyState >= 2) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const cleanup = () => { clearTimeout(timer); video.removeEventListener('loadeddata', loaded); video.removeEventListener('error', failed); };
+    const loaded = () => { cleanup(); resolve(); };
+    const failed = () => { cleanup(); reject(new Error('Could not decode this video.')); };
+    const timer = setTimeout(failed, 15000);
+    video.addEventListener('loadeddata', loaded); video.addEventListener('error', failed);
+    if (video.error) failed();
+  });
+}
+export async function toggleVideo(data: string) {
+  const video = getVideo(data);
+  if (!video.paused) { video.pause(); return; }
+  try { await video.play(); } catch { video.muted = true; try { await video.play(); } catch { /* Unsupported media stays paused. */ } }
+}
+function videoFrame(data: string) {
+  const video = getVideo(data), canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth || 1; canvas.height = video.videoHeight || 1;
+  if (video.readyState >= 2) canvas.getContext('2d')!.drawImage(video, 0, 0);
+  return canvas.toDataURL('image/png');
+}
 export type View = Point & { zoom: number };
 export function wrap(text: string, width: number, measure: (s: string) => number): string[] {
   return text.split('\n').flatMap(paragraph => {
@@ -55,7 +114,16 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
       if (n.kind === 'sticky') { ctx.shadowColor = '#30284b16'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4; }
       ctx.fillStyle = n.color; ctx.fill(); ctx.shadowColor = 'transparent';
       ctx.strokeStyle = n.kind === 'sticky' ? '#0000000d' : '#62587942'; ctx.lineWidth = 1.4; ctx.stroke();
-      if (n.kind === 'image' && n.image) { const img = images.get(n.image); if (img?.complete && img.naturalWidth) { ctx.save(); ctx.clip(); ctx.drawImage(img, n.x, n.y, n.width, n.height); ctx.restore(); } }
+      if (n.kind === 'video' && n.video) {
+        const video = getVideo(n.video);
+        if (video.readyState >= 2) { ctx.save(); ctx.clip(); ctx.drawImage(video, n.x, n.y, n.width, n.height); ctx.restore(); }
+        if (video.paused) {
+          const x = n.x + n.width / 2, y = n.y + n.height / 2;
+          ctx.fillStyle = '#00000099'; ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(x - 6, y - 10); ctx.lineTo(x + 10, y); ctx.lineTo(x - 6, y + 10); ctx.closePath(); ctx.fill();
+        }
+      }
+      if (n.kind === 'image' && n.image) { const img = images.get(n.image); if (img?.complete && img.naturalWidth) { ctx.save(); ctx.clip(); ctx.drawImage(n.image.startsWith('data:image/gif;') ? gifFrame(n.image, img) : img, n.x, n.y, n.width, n.height); ctx.restore(); } }
     }
     if (n.text) {
       ctx.fillStyle = n.kind === 'text' && dark ? '#eeeaf7' : '#3e3655';
@@ -82,7 +150,8 @@ function shapeSvg(n: Shape) {
   const size = textSize(n);
   const ctx = document.createElement('canvas').getContext('2d')!; ctx.font = textFont(n);
   const lines = visibleLines(n, s => ctx.measureText(s).width);
-  return shape + (n.image ? `<image href="${escape(n.image)}" x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" preserveAspectRatio="none"/>` : '') + lines.map((line, i) => `<text x="${n.x + n.width / 2}" y="${n.y + n.height / 2 + (i - (lines.length - 1) / 2) * size * 1.45}" text-anchor="middle" dominant-baseline="central" fill="#3e3655" font-family="system-ui,sans-serif" font-weight="${n.kind === 'text' ? 600 : 500}" font-size="${size}">${escape(line)}</text>`).join('');
+  const image = n.video ? videoFrame(n.video) : n.image;
+  return shape + (image ? `<image href="${escape(image)}" x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" preserveAspectRatio="none"/>` : '') + lines.map((line, i) => `<text x="${n.x + n.width / 2}" y="${n.y + n.height / 2 + (i - (lines.length - 1) / 2) * size * 1.45}" text-anchor="middle" dominant-baseline="central" fill="#3e3655" font-family="system-ui,sans-serif" font-weight="${n.kind === 'text' ? 600 : 500}" font-size="${size}">${escape(line)}</text>`).join('');
 }
 export function svg(scene: Scene) {
   const b = bounds(scene.nodes), pad = 60;

@@ -1,8 +1,28 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { makeShape } from '../packages/scene/src';
-import { growText, textSize, wrap } from '../apps/web/src/render';
+import { growText, textSize, toggleVideo, videos, wrap } from '../apps/web/src/render';
 
 const ctx = { font: '', measureText: (s: string) => ({ width: s.length * 8 }) } as CanvasRenderingContext2D;
+describe('video playback', () => {
+  it('plays with sound, retries muted on rejection, and pauses', async () => {
+    const video = { paused: true, muted: false, play: vi.fn().mockResolvedValue(undefined), pause: vi.fn() };
+    const data = 'data:video/webm;base64,AAAA';
+    videos.set(data, video as unknown as HTMLVideoElement);
+    try {
+      await toggleVideo(data); expect(video.play).toHaveBeenCalledTimes(1); expect(video.muted).toBe(false);
+      video.play.mockRejectedValueOnce(new Error('Autoplay blocked'));
+      await toggleVideo(data); expect(video.play).toHaveBeenCalledTimes(3); expect(video.muted).toBe(true);
+      video.paused = false; await toggleVideo(data); expect(video.pause).toHaveBeenCalledOnce();
+    } finally { videos.delete(data); }
+  });
+  it('handles media that cannot play even when muted', async () => {
+    const video = { paused: true, muted: false, play: vi.fn().mockRejectedValue(new Error('Unsupported codec')) };
+    const data = 'data:video/webm;base64,broken';
+    videos.set(data, video as unknown as HTMLVideoElement);
+    try { await expect(toggleVideo(data)).resolves.toBeUndefined(); expect(video.play).toHaveBeenCalledTimes(2); }
+    finally { videos.delete(data); }
+  });
+});
 describe('brainstorm text layout', () => {
   it.each(['sticky', 'text'] as const)('grows %s to preserve every line without shrinking the font', kind => {
     const n = { ...makeShape(kind, 0, 0), text: 'One\nTwo\nThree\nFour\nFive\nSix\nSeven' };

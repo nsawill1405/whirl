@@ -1,6 +1,6 @@
 export type Point = { x: number; y: number };
-export type Kind = 'rectangle' | 'ellipse' | 'diamond' | 'sticky' | 'text' | 'image';
-export type Shape = Point & { id: string; kind: Kind; width: number; height: number; text: string; color: string; image?: string; groupId?: string };
+export type Kind = 'rectangle' | 'ellipse' | 'diamond' | 'sticky' | 'text' | 'image' | 'video';
+export type Shape = Point & { id: string; kind: Kind; width: number; height: number; text: string; color: string; image?: string; video?: string; groupId?: string };
 export type Connector = { id: string; source: string; target: string; text: string };
 export type Board = { id: string; title: string; nodes: Shape[]; edges: Connector[]; updatedAt: number };
 export type Scene = Pick<Board, 'nodes' | 'edges'>;
@@ -8,6 +8,8 @@ export const uid = () => typeof crypto.randomUUID === 'function' ? crypto.random
 export const COLORS = ['#ffffff', '#eee9ff', '#e5f3ee', '#fff2cc', '#ffe6dc', '#e4efff'];
 export const MAX_IMAGE_BYTES = 12_000_000;
 export const MAX_IMAGE_DATA_LENGTH = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64;
+export const MAX_VIDEO_BYTES = 25_000_000;
+export const MAX_VIDEO_DATA_LENGTH = Math.ceil(MAX_VIDEO_BYTES / 3) * 4 + 64;
 export function makeShape(kind: Kind, x: number, y: number): Shape {
   return { id: uid(), kind, x, y, width: kind === 'sticky' ? 176 : kind === 'text' ? 220 : 184, height: kind === 'sticky' ? 152 : kind === 'text' ? 64 : kind === 'diamond' ? 128 : 88, text: kind === 'sticky' ? 'A bright idea' : kind === 'text' ? 'Add your thoughts' : '', color: kind === 'sticky' ? COLORS[3] : COLORS[0] };
 }
@@ -144,7 +146,8 @@ export function parseBoard(input: unknown): Board {
   if (!b || typeof b.title !== 'string' || b.title.length > 200 || !Array.isArray(b.nodes) || !Array.isArray(b.edges) || b.nodes.length > 3000 || b.edges.length > 6000) throw new Error('This is not a valid Whirl board.');
   const ids = new Set<string>();
   for (const n of b.nodes) {
-    if (!n || typeof n.id !== 'string' || ids.has(n.id) || !['rectangle','ellipse','diamond','sticky','text','image'].includes(n.kind) || ![n.x,n.y,n.width,n.height].every(v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1000000) || n.width < 24 || n.height < 24 || typeof n.text !== 'string' || n.text.length > 10000 || !/^#[\da-f]{6}$/i.test(n.color) || (n.image !== undefined && (typeof n.image !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(n.image) || n.image.length > MAX_IMAGE_DATA_LENGTH))) throw new Error('The board contains an invalid shape.');
+    if (!n || typeof n.id !== 'string' || ids.has(n.id) || !['rectangle','ellipse','diamond','sticky','text','image','video'].includes(n.kind) || ![n.x,n.y,n.width,n.height].every(v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1000000) || n.width < 24 || n.height < 24 || typeof n.text !== 'string' || n.text.length > 10000 || !/^#[\da-f]{6}$/i.test(n.color) || (n.image !== undefined && (typeof n.image !== 'string' || !/^data:image\/(png|jpeg|webp|gif);base64,/.test(n.image) || n.image.length > MAX_IMAGE_DATA_LENGTH))) throw new Error('The board contains an invalid shape.');
+    if (n.video !== undefined && (typeof n.video !== 'string' || !/^data:video\/(mp4|webm|ogg);base64,/.test(n.video) || n.video.length > MAX_VIDEO_DATA_LENGTH)) throw new Error('The board contains an invalid video.');
     ids.add(n.id);
   }
   const edgeIds = new Set<string>();
