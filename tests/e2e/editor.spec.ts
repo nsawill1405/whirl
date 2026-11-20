@@ -42,3 +42,10 @@ test('large embedded image backups round-trip without the image-upload byte limi
   await expect(page.getByRole('status')).toContainText('Board imported');
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /1 shapes/);
 });
+test('IME candidate confirmation does not close the text editor', async ({ page }) => {
+  await blank(page); await add(page, 'Rectangle (R)', 320, 230);
+  await page.locator('canvas').dblclick({ position: { x: 375, y: 260 } });
+  const input = page.getByRole('textbox', { name: 'Shape text' });
+  await input.fill('アイデア'); await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true }); await expect(input).toBeVisible(); await expect(input).toHaveValue('アイデア');
+  await input.press('Enter'); await expect(input).toHaveCount(0);
+});
