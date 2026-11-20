@@ -21,15 +21,16 @@ export function bounds(nodes: Shape[]) {
   const x = Math.min(...nodes.map(n => n.x)), y = Math.min(...nodes.map(n => n.y));
   return { x, y, width: Math.max(...nodes.map(n => n.x + n.width)) - x, height: Math.max(...nodes.map(n => n.y + n.height)) - y };
 }
-function anchor(n: Shape, other: Shape, offset: number): { p: Point; out: Point } {
+type Side = 'left' | 'right' | 'top' | 'bottom';
+function anchor(n: Shape, other: Shape, offset: number, side?: Side): { p: Point; out: Point } {
   const dx = other.x + other.width / 2 - n.x - n.width / 2, dy = other.y + other.height / 2 - n.y - n.height / 2;
   const extent = (ratio: number) => n.kind === 'diamond' ? 1 - Math.abs(ratio) : n.kind === 'ellipse' ? Math.sqrt(1 - ratio * ratio) : 1;
-  if (Math.abs(dx) / n.width >= Math.abs(dy) / n.height) {
-    const shift = offset * Math.min(1, n.height * 0.3 / 24), sign = dx >= 0 ? 1 : -1;
+  if (side ? side === 'left' || side === 'right' : Math.abs(dx) / n.width >= Math.abs(dy) / n.height) {
+    const shift = offset * Math.min(1, n.height * 0.3 / 24), sign = side ? side === 'right' ? 1 : -1 : dx >= 0 ? 1 : -1;
     const x = n.x + n.width / 2 + sign * n.width / 2 * extent(shift / (n.height / 2)), y = n.y + n.height / 2 + shift;
     return { p: { x, y }, out: { x: n.x + n.width / 2 + sign * (n.width / 2 + 20), y } };
   }
-  const shift = offset * Math.min(1, n.width * 0.3 / 24), sign = dy >= 0 ? 1 : -1;
+  const shift = offset * Math.min(1, n.width * 0.3 / 24), sign = side ? side === 'bottom' ? 1 : -1 : dy >= 0 ? 1 : -1;
   const x = n.x + n.width / 2 + shift, y = n.y + n.height / 2 + sign * n.height / 2 * extent(shift / (n.width / 2));
   return { p: { x, y }, out: { x, y: n.y + n.height / 2 + sign * (n.height / 2 + 20) } };
 }
@@ -63,10 +64,14 @@ export function route(edge: Connector, nodes: Shape[], edges: Connector[] = noEd
 function computeRoute(edge: Connector, nodes: Shape[], offset: number): Point[] {
   const source = nodes.find(n => n.id === edge.source), target = nodes.find(n => n.id === edge.target);
   if (!source || !target) return [];
-  const obstacles = nodes.filter(n => n !== source && n !== target);
   const exit = (n: Shape, other: Shape) => {
     const shifted = anchor(n, other, offset);
-    return offset && blocked(shifted.p, shifted.out, obstacles) ? anchor(n, other, 0) : shifted;
+    const obstacles = nodes.filter(obstacle => obstacle !== n);
+    if (!offset || !blocked(shifted.p, shifted.out, obstacles)) return shifted;
+    const horizontal = shifted.p.y === shifted.out.y;
+    const sides: Side[] = horizontal ? offset < 0 ? ['top', 'bottom', 'left', 'right'] : ['bottom', 'top', 'right', 'left'] : offset < 0 ? ['left', 'right', 'top', 'bottom'] : ['right', 'left', 'bottom', 'top'];
+    for (const side of sides) { const candidate = anchor(n, other, offset, side); if (!blocked(candidate.p, candidate.out, obstacles)) return candidate; }
+    return shifted;
   };
   const a = exit(source, target), b = exit(target, source);
   // A rectilinear visibility grid keeps arrows clear of intervening shapes.

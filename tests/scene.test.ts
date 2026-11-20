@@ -72,6 +72,17 @@ describe('scene graph', () => {
       }
     }
   });
+  it('keeps retry routes independently selectable when both shifted exits are blocked', () => {
+    const nodes = [shape('a', 0, 100), shape('b', 500, 100),
+      { ...shape('above', 110, 0), width: 380, height: 120 },
+      { ...shape('below', 110, 160), width: 380, height: 120 }];
+    const edges = [{ id: 'next', source: 'a', target: 'b', text: 'Next' }, { id: 'retry', source: 'b', target: 'a', text: 'Retry' }];
+    for (const edge of edges) {
+      const p = edgeMiddle(route(edge, nodes, edges));
+      expect(hitNode(nodes, p)).toBeUndefined();
+      expect(hitEdge(edges, nodes, p)?.id).toBe(edge.id);
+    }
+  });
 });
 describe('portable boards', () => {
   const board = (): Board => ({ id: 'old', title: 'Test <board>', nodes: [shape('a', 0, 0), shape('b', 400, 0)], edges: [{ id: 'e', source: 'a', target: 'b', text: 'hello' }], updatedAt: 0 });
