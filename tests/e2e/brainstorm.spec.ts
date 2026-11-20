@@ -77,7 +77,8 @@ test('Layers editing remains readable on narrow screens', async ({ page }) => {
   const editor = page.getByRole('textbox', { name: 'Shape text' });
   await editor.fill('Read this idea'); await editor.press('Enter');
   await page.getByRole('button', { name: 'Toggle layers' }).click();
-  await page.getByRole('complementary').getByRole('button', { name: 'Read this idea' }).dblclick();
+  await page.getByRole('complementary').getByRole('button', { name: 'Read this idea' }).click();
+  await expect(page.getByRole('complementary')).toHaveCount(0);
   await expect(editor).toBeInViewport({ ratio: 1 });
   await expect(editor).toBeFocused();
   expect(await editor.evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
