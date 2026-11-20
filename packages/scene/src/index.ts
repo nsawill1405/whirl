@@ -46,7 +46,7 @@ export function resizeSelection(nodes: Shape[], ids: string[], dx: number, dy: n
   const selected = new Set(expandSelection(nodes, ids)), members = nodes.filter(n => selected.has(n.id));
   if (!members.length) return nodes;
   const b = bounds(members), sx = Math.max(...members.map(n => 24 / n.width), (b.width + dx) / b.width), sy = Math.max(...members.map(n => 24 / n.height), (b.height + dy) / b.height);
-  return nodes.map(n => selected.has(n.id) ? { ...n, x: b.x + (n.x - b.x) * sx, y: b.y + (n.y - b.y) * sy, width: n.width * sx, height: n.height * sy } : n);
+  return nodes.map(n => selected.has(n.id) ? { ...n, x: b.x + (n.x - b.x) * sx, y: b.y + (n.y - b.y) * sy, width: Math.max(24, n.width * sx), height: Math.max(24, n.height * sy) } : n);
 }
 type Side = 'left' | 'right' | 'top' | 'bottom';
 function anchor(n: Shape, other: Shape, offset: number, side?: Side): { p: Point; out: Point } {

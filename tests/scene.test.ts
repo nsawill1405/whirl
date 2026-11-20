@@ -127,6 +127,12 @@ describe('persistent groups', () => {
     expect(copy.edges[0]).toMatchObject({ source: copy.nodes[0].id, target: copy.nodes[1].id, text: 'internal' });
     expect(copy.nodes[0]).toMatchObject({ x: -8, y: 52 });
   });
+  it('keeps fractional minimum-size rounding importable', () => {
+    const original = groupShapes(nodes().map(n => ({ ...n, width: 188, height: 188 })), ['a', 'b']);
+    const resized = resizeSelection(original, ['a'], -10000, -10000);
+    expect(resized[0].width).toBe(24); expect(resized[0].height).toBe(24);
+    expect(parseBoard(JSON.parse(JSON.stringify({ title: 'Tiny group', nodes: resized, edges: [] }))).nodes).toEqual(resized);
+  });
   it('round-trips group membership through JSON, and accepts legacy ungrouped boards', () => {
     const original = { title: 'Groups', nodes: groupShapes(nodes(), ['a', 'b']), edges: [] };
     expect(parseBoard(JSON.parse(JSON.stringify(original))).nodes).toEqual(original.nodes);
