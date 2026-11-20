@@ -1,6 +1,6 @@
 export type Point = { x: number; y: number };
 export type Kind = 'rectangle' | 'ellipse' | 'diamond' | 'sticky' | 'text' | 'image';
-export type Shape = Point & { id: string; kind: Kind; width: number; height: number; text: string; color: string; image?: string };
+export type Shape = Point & { id: string; kind: Kind; width: number; height: number; text: string; color: string; image?: string; groupId?: string };
 export type Connector = { id: string; source: string; target: string; text: string };
 export type Board = { id: string; title: string; nodes: Shape[]; edges: Connector[]; updatedAt: number };
 export type Scene = Pick<Board, 'nodes' | 'edges'>;
@@ -20,6 +20,33 @@ export function bounds(nodes: Shape[]) {
   if (!nodes.length) return { x: 0, y: 0, width: 800, height: 600 };
   const x = Math.min(...nodes.map(n => n.x)), y = Math.min(...nodes.map(n => n.y));
   return { x, y, width: Math.max(...nodes.map(n => n.x + n.width)) - x, height: Math.max(...nodes.map(n => n.y + n.height)) - y };
+}
+export function expandSelection(nodes: Shape[], ids: string[]): string[] {
+  const selected = new Set(ids), groups = new Set(nodes.filter(n => selected.has(n.id) && n.groupId).map(n => n.groupId));
+  return [...new Set([...ids, ...nodes.filter(n => n.groupId && groups.has(n.groupId)).map(n => n.id)])];
+}
+export function selectionScene(scene: Scene, ids: string[]): Scene {
+  const selected = new Set(expandSelection(scene.nodes, ids));
+  return { nodes: scene.nodes.filter(n => selected.has(n.id)), edges: scene.edges.filter(e => selected.has(e.source) && selected.has(e.target)) };
+}
+export function groupShapes(nodes: Shape[], ids: string[], ungroup = false): Shape[] {
+  const selected = new Set(expandSelection(nodes, ids));
+  if (!ungroup && nodes.filter(n => selected.has(n.id)).length < 2) return nodes;
+  const groupId = ungroup ? undefined : uid();
+  return nodes.map(n => { if (!selected.has(n.id)) return n; const { groupId: _old, ...shape } = n; return groupId ? { ...shape, groupId } : shape; });
+}
+export function cloneScene(scene: Scene, offset: number): Scene {
+  const ids = new Map(scene.nodes.map(n => [n.id, uid()])), groups = new Map(scene.nodes.filter(n => n.groupId).map(n => [n.groupId!, uid()]));
+  return {
+    nodes: scene.nodes.map(n => ({ ...n, id: ids.get(n.id)!, ...(n.groupId ? { groupId: groups.get(n.groupId)! } : {}), x: n.x + offset, y: n.y + offset })),
+    edges: scene.edges.map(e => ({ ...e, id: uid(), source: ids.get(e.source)!, target: ids.get(e.target)! })),
+  };
+}
+export function resizeSelection(nodes: Shape[], ids: string[], dx: number, dy: number): Shape[] {
+  const selected = new Set(expandSelection(nodes, ids)), members = nodes.filter(n => selected.has(n.id));
+  if (!members.length) return nodes;
+  const b = bounds(members), sx = Math.max(...members.map(n => 24 / n.width), (b.width + dx) / b.width), sy = Math.max(...members.map(n => 24 / n.height), (b.height + dy) / b.height);
+  return nodes.map(n => selected.has(n.id) ? { ...n, x: b.x + (n.x - b.x) * sx, y: b.y + (n.y - b.y) * sy, width: Math.max(24, n.width * sx), height: Math.max(24, n.height * sy) } : n);
 }
 type Side = 'left' | 'right' | 'top' | 'bottom';
 function anchor(n: Shape, other: Shape, offset: number, side?: Side): { p: Point; out: Point } {
@@ -121,6 +148,7 @@ export function parseBoard(input: unknown): Board {
     ids.add(n.id);
   }
   const edgeIds = new Set<string>();
+  for (const n of b.nodes) if (n.groupId !== undefined && (typeof n.groupId !== 'string' || !n.groupId.length || n.groupId.length > 200)) throw new Error('The board contains an invalid group.');
   for (const e of b.edges) { if (!e || typeof e.id !== 'string' || edgeIds.has(e.id) || ids.has(e.id) || !ids.has(e.source) || !ids.has(e.target) || e.source === e.target || typeof e.text !== 'string' || e.text.length > 10000) throw new Error('The board contains an invalid connector.'); edgeIds.add(e.id); }
   return { id: uid(), title: b.title, nodes: b.nodes, edges: b.edges, updatedAt: Date.now() };
 }

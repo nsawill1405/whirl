@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { bounds, contains, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, route, uid, type Board } from '../packages/scene/src';
+import { bounds, cloneScene, contains, edgeMiddle, expandSelection, groupShapes, hitEdge, hitNode, makeShape, parseBoard, resizeSelection, route, selectionScene, uid, type Board } from '../packages/scene/src';
 const shape = (id: string, x: number, y: number) => ({ ...makeShape('rectangle', x, y), id, width: 100, height: 80 });
 describe('scene graph', () => {
   it('creates unique identifiers on HTTP origins without randomUUID', () => {
@@ -91,5 +91,52 @@ describe('portable boards', () => {
   it('rejects bad coordinates, external images, duplicate ids and dangling arrows', () => {
     const cases = [() => { const b = board(); b.nodes[0].x = Infinity; return b; }, () => { const b = board(); b.nodes[0].image = 'https://tracking.example/img.png'; return b; }, () => { const b = board(); b.nodes[1].id = 'a'; return b; }, () => { const b = board(); b.edges[0].target = 'none'; return b; }];
     cases.forEach(make => expect(() => parseBoard(make())).toThrow());
+  });
+});
+
+describe('persistent groups', () => {
+  const nodes = () => [shape('a', -40, 20), shape('b', 160, 120), shape('other', 500, 300)];
+  it('groups shapes without changing geometry and expands any member atomically', () => {
+    const original = nodes(), grouped = groupShapes(original, ['a', 'b']);
+    expect(grouped[0].groupId).toBeTruthy(); expect(grouped[0].groupId).toBe(grouped[1].groupId);
+    expect(grouped[2]).toBe(original[2]); expect(original[0].groupId).toBeUndefined();
+    expect(expandSelection(grouped, ['b', 'edge'])).toEqual(['b', 'edge', 'a']);
+    expect(groupShapes(original, ['a'])).toBe(original);
+    const ungrouped = groupShapes(grouped, ['b'], true);
+    expect(ungrouped).toEqual(original);
+  });
+  it('combines existing groups and shapes into one flat group', () => {
+    const grouped = groupShapes(nodes(), ['a', 'b']), combined = groupShapes(grouped, ['b', 'other']);
+    expect(new Set(combined.map(n => n.groupId)).size).toBe(1);
+    expect(combined[0].groupId).not.toBe(grouped[0].groupId);
+  });
+  it('resizes around shared bounds, retaining spacing and minimum shape dimensions', () => {
+    const original = groupShapes(nodes(), ['a', 'b']), resized = resizeSelection(original, ['a'], 300, 180);
+    expect(resized[0]).toMatchObject({ x: -40, y: 20, width: 200, height: 160 });
+    expect(resized[1]).toMatchObject({ x: 360, y: 220, width: 200, height: 160 });
+    expect(resized[2]).toBe(original[2]);
+    const small = resizeSelection(original, ['a'], -10000, -10000);
+    small.slice(0, 2).forEach(n => { expect(n.width).toBeGreaterThanOrEqual(24); expect(n.height).toBeGreaterThanOrEqual(24); });
+  });
+  it('copies and exports all members and internal connectors with independent group ids', () => {
+    const grouped = groupShapes(nodes(), ['a', 'b']), scene = { nodes: grouped, edges: [{ id: 'e', source: 'a', target: 'b', text: 'internal' }, { id: 'outside', source: 'b', target: 'other', text: '' }] };
+    const selection = selectionScene(scene, ['b']), copy = cloneScene(selection, 32), second = cloneScene(selection, 64);
+    expect(selection.nodes).toHaveLength(2); expect(selection.edges).toHaveLength(1);
+    expect(copy.nodes[0].groupId).toBe(copy.nodes[1].groupId); expect(copy.nodes[0].groupId).not.toBe(grouped[0].groupId);
+    expect(second.nodes[0].groupId).not.toBe(copy.nodes[0].groupId);
+    expect(copy.edges[0]).toMatchObject({ source: copy.nodes[0].id, target: copy.nodes[1].id, text: 'internal' });
+    expect(copy.nodes[0]).toMatchObject({ x: -8, y: 52 });
+  });
+  it('keeps fractional minimum-size rounding importable', () => {
+    const original = groupShapes(nodes().map(n => ({ ...n, width: 188, height: 188 })), ['a', 'b']);
+    const resized = resizeSelection(original, ['a'], -10000, -10000);
+    expect(resized[0].width).toBe(24); expect(resized[0].height).toBe(24);
+    expect(parseBoard(JSON.parse(JSON.stringify({ title: 'Tiny group', nodes: resized, edges: [] }))).nodes).toEqual(resized);
+  });
+  it('round-trips group membership through JSON, and accepts legacy ungrouped boards', () => {
+    const original = { title: 'Groups', nodes: groupShapes(nodes(), ['a', 'b']), edges: [] };
+    expect(parseBoard(JSON.parse(JSON.stringify(original))).nodes).toEqual(original.nodes);
+    expect(parseBoard({ ...original, nodes: nodes() }).nodes.every(n => !n.groupId)).toBe(true);
+    for (const groupId of [null, 1, {}, '', 'x'.repeat(201)]) expect(() => parseBoard({ ...original, nodes: [{ ...original.nodes[0], groupId }] })).toThrow('invalid group');
   });
 });

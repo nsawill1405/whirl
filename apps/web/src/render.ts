@@ -65,11 +65,13 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       lines.forEach((line, i) => ctx.fillText(line, n.x + n.width / 2, n.y + n.height / 2 + (i - (lines.length - 1) / 2) * size * 1.45));
     }
-    if (selected.includes(n.id)) {
+    ctx.restore();
+  }
+  const members = scene.nodes.filter(n => selected.includes(n.id));
+  if (members.length) {
+      const n = bounds(members);
       ctx.strokeStyle = accent; ctx.lineWidth = 1.5 / view.zoom; ctx.strokeRect(n.x - 4, n.y - 4, n.width + 8, n.height + 8);
       for (const p of [{ x: n.x - 4, y: n.y - 4 }, { x: n.x + n.width + 4, y: n.y - 4 }, { x: n.x - 4, y: n.y + n.height + 4 }, { x: n.x + n.width + 4, y: n.y + n.height + 4 }]) { ctx.fillStyle = '#ffffff'; ctx.fillRect(p.x - 3 / view.zoom, p.y - 3 / view.zoom, 6 / view.zoom, 6 / view.zoom); ctx.strokeRect(p.x - 3 / view.zoom, p.y - 3 / view.zoom, 6 / view.zoom, 6 / view.zoom); }
-    }
-    ctx.restore();
   }
   ctx.restore();
 }

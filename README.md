@@ -7,6 +7,7 @@
 - Infinite canvas with pan, zoom, fit-to-content, and light/dark themes.
 - Rectangles, ellipses, diamonds, sticky notes, text, and PNG/JPEG/WebP images.
 - Select, shift-select, box-select, move, resize (bottom-right handle), recolor, duplicate, copy/paste, and undo/redo.
+- Persistent groups: select shapes and group them to select, move, resize, copy, or export together.
 - Attached orthogonal connectors that route around shapes, with editable labels.
 - Multiple boards, IndexedDB autosave, and flowchart/retrospective templates.
 - PNG, SVG, and editable `.whirl.json` exports; import boards and images.
@@ -55,6 +56,7 @@ To move a board, choose **Export → Whirl board**, then import the JSON through
 | Edit text or arrow label | Double-click, or select and Enter |
 | Finish editing / newline | Enter / Shift + Enter |
 | Multiple selection | Shift + click, or drag a selection box |
+| Group / ungroup selected shapes | Ctrl/⌘ G / Ctrl/⌘ Shift G |
 | Undo / redo | Ctrl/⌘ Z / Ctrl/⌘ Shift Z |
 | Copy / paste / duplicate | Ctrl/⌘ C / V / D (within Whirl) |
 | Move selected objects | Arrow keys; Shift for larger steps |
@@ -63,6 +65,8 @@ To move a board, choose **Export → Whirl board**, then import the JSON through
 | Fit everything | 1 |
 
 On touch screens, choose Pan to move the viewport; use the zoom buttons to zoom. Mobile editing is supported, but a mouse and keyboard are best for complex boards.
+
+Use the selection bar's Group/Ungroup buttons or the shortcuts above. Clicking any member (including in Layers) selects its whole group; drag the shared bottom-right handle to resize it. Groups save with the board and JSON backups, and copies get independent groups. Grouping existing groups combines them into one flat group; ungroup before editing individual members. Choose **Export → Selection as PNG/SVG/JSON** to export just the selected group and its internal connectors without changing whole-board exports.
 
 ## Development
 
