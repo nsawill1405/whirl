@@ -60,8 +60,9 @@ test.describe('phone touch navigation', () => {
     await touch(client, 'touchStart', [a, b]);
     await touch(client, 'touchMove', [{ ...a, x: 70 }, { ...b, x: 310 }]);
     await expect(page.getByRole('button', { name: 'Reset zoom to 100 percent' })).toHaveText('200%');
+    // CDP touchEnd lists the finger being lifted; b is the survivor.
     await touch(client, 'touchEnd', [{ ...a, x: 70 }]);
-    await touch(client, 'touchMove', [{ ...a, x: 110, y: 330 }]);
+    await touch(client, 'touchMove', [{ ...b, x: 280, y: 330 }]);
     await touch(client, 'touchEnd', []);
     await expect(page.locator('canvas')).toHaveAttribute('aria-label', /0 shapes/);
     await expect(page.getByRole('button', { name: 'Rectangle (R)', exact: true })).toHaveAttribute('aria-pressed', 'true');
