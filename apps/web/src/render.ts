@@ -1,5 +1,9 @@
 import { bounds, edgeMiddle, route, type Scene, type Shape, type Point } from '@whirl/scene';
 export type View = Point & { zoom: number };
+export function gridSize(zoom: number) {
+  const step = 24 * zoom;
+  return { step: step * 2 ** Math.max(0, Math.ceil(Math.log2(12 / step))), radius: Math.max(0.8, 1.2 * zoom) };
+}
 export function wrap(text: string, width: number, measure: (s: string) => number): string[] {
   return text.split('\n').flatMap(paragraph => {
     const lines: string[] = []; let line = '';
@@ -32,9 +36,9 @@ function visibleLines(n: Shape, measure: (s: string) => number) {
 export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, width: number, height: number, selected: string[] = [], dark = false, grid = true, images = new Map<string, HTMLImageElement>()) {
   const bg = dark ? '#20202a' : '#faf9f6', ink = dark ? '#c5c1dc' : '#9992b2', accent = '#7967e9';
   ctx.clearRect(0, 0, width, height); ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
-  if (grid && view.zoom > 0.24) {
-    const step = 24 * view.zoom; ctx.fillStyle = dark ? '#3f3c50' : '#dcd9e3';
-    for (let x = view.x % step; x < width; x += step) for (let y = view.y % step; y < height; y += step) { ctx.beginPath(); ctx.arc(x, y, 0.8, 0, Math.PI * 2); ctx.fill(); }
+  if (grid) {
+    const { step, radius } = gridSize(view.zoom); ctx.fillStyle = dark ? '#3f3c50' : '#dcd9e3';
+    for (let x = view.x % step; x < width; x += step) for (let y = view.y % step; y < height; y += step) { ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill(); }
   }
   ctx.save(); ctx.translate(view.x, view.y); ctx.scale(view.zoom, view.zoom);
   for (const edge of scene.edges) {
