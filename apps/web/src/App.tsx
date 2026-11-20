@@ -98,7 +98,11 @@ export default function App() {
       if (marquee) { ctx.fillStyle = '#7967e91a'; ctx.strokeStyle = '#7967e9'; ctx.fillRect(marquee.a.x * view.zoom + view.x, marquee.a.y * view.zoom + view.y, (marquee.b.x - marquee.a.x) * view.zoom, (marquee.b.y - marquee.a.y) * view.zoom); ctx.strokeRect(marquee.a.x * view.zoom + view.x, marquee.a.y * view.zoom + view.y, (marquee.b.x - marquee.a.x) * view.zoom, (marquee.b.y - marquee.a.y) * view.zoom); }
       if (source) { const n = board.nodes.find(n => n.id === source); if (n) { ctx.setLineDash([5, 5]); ctx.strokeStyle = '#7967e9'; ctx.beginPath(); ctx.moveTo((n.x + n.width / 2) * view.zoom + view.x, (n.y + n.height / 2) * view.zoom + view.y); ctx.lineTo(pointer.x * view.zoom + view.x, pointer.y * view.zoom + view.y); ctx.stroke(); } }
     };
-    for (const n of board.nodes) if (n.image && !images.current.has(n.image)) { const img = new Image(); images.current.set(n.image, img); img.onload = draw; img.src = n.image; }
+    for (const n of board.nodes) if (n.image) {
+      let img = images.current.get(n.image);
+      if (!img) { img = new Image(); images.current.set(n.image, img); img.src = n.image; }
+      if (!img.complete) img.onload = draw;
+    }
     draw();
     return () => { for (const img of images.current.values()) img.onload = null; };
   }, [board, view, size, selected, dark, source, pointer, marquee]);
