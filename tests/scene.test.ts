@@ -57,6 +57,21 @@ describe('scene graph', () => {
     const positions = edges.map(e => edgeMiddle(route(e, nodes, edges)).y);
     expect(new Set(positions).size).toBe(edges.length);
   });
+  it('keeps shifted exits and retry labels clear of a nearby shape', () => {
+    const obstacle = { ...shape('obstacle', 110, 0), width: 300, height: 120 };
+    const nodes = [shape('a', 0, 100), shape('b', 500, 100), obstacle];
+    const edges = [{ id: 'next', source: 'a', target: 'b', text: 'Next' }, { id: 'retry', source: 'b', target: 'a', text: 'Retry' }];
+    for (const edge of edges) {
+      const path = route(edge, nodes, edges);
+      expect(contains(obstacle, edgeMiddle(path))).toBe(false);
+      for (let i = 1; i < path.length; i++) {
+        const a = path[i - 1], b = path[i];
+        const horizontalCrosses = a.y === b.y && a.y > obstacle.y && a.y < obstacle.y + obstacle.height && Math.min(a.x, b.x) < obstacle.x + obstacle.width && Math.max(a.x, b.x) > obstacle.x;
+        const verticalCrosses = a.x === b.x && a.x > obstacle.x && a.x < obstacle.x + obstacle.width && Math.min(a.y, b.y) < obstacle.y + obstacle.height && Math.max(a.y, b.y) > obstacle.y;
+        expect(horizontalCrosses || verticalCrosses).toBe(false);
+      }
+    }
+  });
 });
 describe('portable boards', () => {
   const board = (): Board => ({ id: 'old', title: 'Test <board>', nodes: [shape('a', 0, 0), shape('b', 400, 0)], edges: [{ id: 'e', source: 'a', target: 'b', text: 'hello' }], updatedAt: 0 });

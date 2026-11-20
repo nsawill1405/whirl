@@ -63,7 +63,12 @@ export function route(edge: Connector, nodes: Shape[], edges: Connector[] = noEd
 function computeRoute(edge: Connector, nodes: Shape[], offset: number): Point[] {
   const source = nodes.find(n => n.id === edge.source), target = nodes.find(n => n.id === edge.target);
   if (!source || !target) return [];
-  const a = anchor(source, target, offset), b = anchor(target, source, offset);
+  const obstacles = nodes.filter(n => n !== source && n !== target);
+  const exit = (n: Shape, other: Shape) => {
+    const shifted = anchor(n, other, offset);
+    return offset && blocked(shifted.p, shifted.out, obstacles) ? anchor(n, other, 0) : shifted;
+  };
+  const a = exit(source, target), b = exit(target, source);
   // A rectilinear visibility grid keeps arrows clear of intervening shapes.
   const near = nodes.filter(n => n.x + n.width > Math.min(a.out.x, b.out.x) - 200 && n.x < Math.max(a.out.x, b.out.x) + 200 && n.y + n.height > Math.min(a.out.y, b.out.y) - 200 && n.y < Math.max(a.out.y, b.out.y) + 200);
   const xs = [...new Set([a.out.x, b.out.x, ...near.flatMap(n => [n.x - 20, n.x + n.width + 20])])].sort((a, b) => a - b);
