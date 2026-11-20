@@ -10,7 +10,7 @@ export function template(kind: 'welcome' | 'flowchart' | 'retro' | 'blank'): Boa
     add('decision', 'diamond', 420, 339, 170, 150, 'What if\nwe tried it?', '#e5f3ee');
     add('build', 'rectangle', 725, 375, 190, 80, 'Make it happen', '#eee9ff');
     add('note1', 'sticky', 695, 150, 190, 154, 'Small steps.\nWild ideas.\nNo wrong answers.', '#fff2cc');
-    add('note2', 'sticky', 95, 565, 190, 154, 'Double-click anything\nto make it yours.', '#ffe6dc');
+    add('note2', 'sticky', 95, 565, 190, 154, 'Select a shape,\nthen edit its text\nto make it yours.', '#ffe6dc');
     add('note3', 'sticky', 335, 565, 190, 154, 'Try the arrow tool\nto connect two ideas.', '#e4efff');
     add('footer', 'text', 620, 583, 330, 70, 'A little messy.\nA lot of possibility.');
     edges.push({ id: 'e1', source: 'start', target: 'explore', text: '' }, { id: 'e2', source: 'explore', target: 'decision', text: 'ask a question' }, { id: 'e3', source: 'decision', target: 'build', text: 'yes, let’s' });

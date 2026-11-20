@@ -1,11 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-async function blank(page: Page) { await page.goto('/'); await expect(page.getByLabel('Board title')).toHaveValue('A little room for big ideas'); await page.getByRole('button', { name: 'My boards' }).click(); await page.getByRole('button', { name: 'New board', exact: true }).click(); await expect(page.getByLabel('Board title')).toHaveValue('Untitled board'); }
+async function blank(page: Page) { await page.goto('/'); await expect(page.getByLabel('Board title')).toHaveValue('A little room for big ideas'); await page.getByRole('button', { name: 'My boards' }).click(); await page.getByRole('dialog').getByRole('button', { name: 'New board', exact: true }).click(); await expect(page.getByLabel('Board title')).toHaveValue('Untitled board'); }
 async function add(page: Page, tool: string, x: number, y: number) { await page.getByRole('button', { name: tool, exact: true }).click(); await page.locator('canvas').click({ position: { x, y } }); }
 test('draw, connect, edit, move, resize, undo, duplicate, persist, and export', async ({ page }) => {
   await blank(page);
   await add(page, 'Rectangle (R)', 320, 230);
   const box = (await page.locator('canvas').boundingBox())!;
-  const zoom = Math.min(1, (box.width - 150) / 870, (box.height - 150) / 670);
+  const zoom = 1; // Empty boards open at a useful drawing scale.
   await page.mouse.move(box.x + 320 + 188 * zoom, box.y + 230 + 92 * zoom); await page.mouse.down(); await page.mouse.move(box.x + 360 + 188 * zoom, box.y + 260 + 92 * zoom, { steps: 5 }); await page.mouse.up();
   await page.locator('canvas').dblclick({ position: { x: 375, y: 260 } }); await page.getByRole('textbox', { name: 'Shape text' }).fill('Start here'); await page.getByRole('textbox', { name: 'Shape text' }).press('Enter');
   await add(page, 'Ellipse (O)', 750, 230);
