@@ -70,8 +70,8 @@ test('a short label does not retain the default placeholder height', async ({ pa
   expect(label.text).toBe('Hi');
 });
 test('Layers editing remains readable on narrow screens', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 780 });
   await blank(page);
+  await page.setViewportSize({ width: 320, height: 780 });
   await page.getByRole('button', { name: 'Sticky note (S)', exact: true }).click();
   await page.locator('canvas').click({ position: { x: 100, y: 260 } });
   const editor = page.getByRole('textbox', { name: 'Shape text' });
