@@ -113,6 +113,25 @@ test.describe('phone touch navigation', () => {
     expect((await scene(page)).nodes[0].text).toBe('');
   });
 
+  test('a pinch on a connector target preserves the pending connector tool and source', async ({ page, context }) => {
+    await startBlank(page);
+    await page.getByRole('button', { name: 'Rectangle (R)', exact: true }).tap();
+    await page.locator('canvas').tap({ position: { x: 30, y: 180 } });
+    await page.getByRole('button', { name: 'Rectangle (R)', exact: true }).tap();
+    await page.locator('canvas').tap({ position: { x: 210, y: 300 } });
+    await page.getByRole('button', { name: 'Connector (C)', exact: true }).tap();
+    await page.touchscreen.tap(60, 270);
+    const client = await context.newCDPSession(page);
+    const a = { id: 1, x: 240, y: 390 }, b = { id: 2, x: 80, y: 480 };
+    await touch(client, 'touchStart', [a]);
+    await touch(client, 'touchStart', [a, b]);
+    await touch(client, 'touchEnd', []);
+    await expect(page.getByRole('button', { name: 'Connector (C)', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    expect((await scene(page)).edges).toHaveLength(0);
+    await page.touchscreen.tap(240, 390);
+    expect((await scene(page)).edges).toHaveLength(1);
+  });
+
   test('canceling a touch discards an unfinished shape', async ({ page, context }) => {
     await startBlank(page);
     await page.getByRole('button', { name: 'Rectangle (R)', exact: true }).tap();

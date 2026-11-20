@@ -8,7 +8,7 @@ import { loadBoards, saveBoards } from './storage';
 type Tool = Kind | 'select' | 'hand' | 'connector';
 type Edit = { id: string; text: string };
 type Drag = { type: 'pan' | 'move' | 'resize' | 'marquee' | 'create'; start: Point; screen: Point; scene: Scene; ids: string[]; view: View; changed: boolean };
-type TouchStart = { scene: Scene; selected: string[]; source: string | null; undo: Scene[]; redo: Scene[] };
+type TouchStart = { scene: Scene; selected: string[]; source: string | null; tool: Tool; undo: Scene[]; redo: Scene[] };
 type Gesture = { center: Point; distance: number; view: View };
 const touchGeometry = (points: Map<number, Point>) => {
   const [a, b] = [...points.values()];
@@ -125,7 +125,7 @@ export default function App() {
   const world = (p: Point) => ({ x: (p.x - view.x) / view.zoom, y: (p.y - view.y) / view.zoom });
   const cancelTouchEdit = () => {
     const start = touchStart.current;
-    if (start) { updateScene(start.scene); setSelected(start.selected); setSource(start.source); undoStack.current = start.undo; redoStack.current = start.redo; renderHistory(v => v + 1); }
+    if (start) { updateScene(start.scene); setSelected(start.selected); setSource(start.source); setTool(start.tool); undoStack.current = start.undo; redoStack.current = start.redo; renderHistory(v => v + 1); }
     drag.current = null; setMarquee(null);
   };
   const onDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -134,7 +134,7 @@ export default function App() {
     if (e.pointerType === 'touch' && board) {
       e.preventDefault(); setTouchInput(true); e.currentTarget.setPointerCapture(e.pointerId);
       touches.current.set(e.pointerId, screenPoint(e));
-      if (touches.current.size === 1) touchStart.current = { scene: committed ?? snapshot(board), selected, source, undo: [...undoStack.current], redo: [...redoStack.current] };
+      if (touches.current.size === 1) touchStart.current = { scene: committed ?? snapshot(board), selected, source, tool, undo: [...undoStack.current], redo: [...redoStack.current] };
       else {
         if (!gesture.current) cancelTouchEdit();
         gesture.current = { ...touchGeometry(touches.current), view };
