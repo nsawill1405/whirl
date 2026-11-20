@@ -16,7 +16,7 @@ export function growText(n: Shape, ctx: CanvasRenderingContext2D): Shape {
   if (n.kind !== 'sticky' && n.kind !== 'text') return n;
   ctx.font = textFont(n);
   const lines = wrap(n.text, n.width - 24, s => ctx.measureText(s).width);
-  return { ...n, height: Math.max(n.height, Math.ceil(lines.length * textSize(n) * 1.45 + 16)) };
+  return { ...n, height: Math.max(n.kind === 'text' ? 40 : n.height, Math.ceil(lines.length * textSize(n) * 1.45 + 16)) };
 }
 function visibleLines(n: Shape, measure: (s: string) => number) {
   const width = n.width * (n.kind === 'diamond' ? 0.57 : 1) - 24;

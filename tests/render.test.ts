@@ -22,6 +22,10 @@ describe('brainstorm text layout', () => {
     const rect = { ...makeShape('rectangle', 0, 0), text: 'a\n'.repeat(50) };
     expect(growText(rect, ctx)).toBe(rect);
   });
+  it('shrinks a shortened text label to its content instead of leaving an invisible hitbox', () => {
+    const label = { ...makeShape('text', 0, 0), width: 48, height: 500, text: 'Hi' };
+    expect(growText(label, ctx).height).toBe(51);
+  });
   it('wraps long words and preserves explicit blank lines', () => {
     expect(wrap('abcdef\n\nhi', 24, s => s.length * 8)).toEqual(['abc', 'def', '', 'hi']);
   });

@@ -57,6 +57,18 @@ test('Layers reveals offscreen ideas before editing', async ({ page }) => {
   await editor.fill('Found and updated'); await editor.press('Enter');
   expect(JSON.parse(await exported(page, 'Whirl board')).nodes[0].text).toBe('Found and updated');
 });
+test('a short label does not retain the default placeholder height', async ({ page }) => {
+  await blank(page);
+  await page.getByRole('button', { name: 'Text (T)', exact: true }).click();
+  const canvas = (await page.locator('canvas').boundingBox())!;
+  await page.mouse.move(canvas.x + 500, canvas.y + 250); await page.mouse.down();
+  await page.mouse.move(canvas.x + 548, canvas.y + 290, { steps: 5 }); await page.mouse.up();
+  const editor = page.getByRole('textbox', { name: 'Shape text' });
+  await editor.fill('Hi'); await editor.press('Enter');
+  const label = JSON.parse(await exported(page, 'Whirl board')).nodes[0];
+  expect(label.height).toBeLessThan(100);
+  expect(label.text).toBe('Hi');
+});
 test('zoom reset preserves the world point at the viewport center', async ({ page }) => {
   await blank(page);
   await page.getByRole('button', { name: 'Sticky note (S)', exact: true }).click();
