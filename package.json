@@ -1,0 +1,28 @@
+{
+  "name": "whirl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/web",
+    "packages/scene"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @whirl/web -- --host 0.0.0.0",
+    "build": "npm run build -w @whirl/web",
+    "start": "npm run preview -w @whirl/web -- --host 0.0.0.0 --port 4173",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^22.19.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.2",
+    "vitest": "~4.1.12"
+  }
+}
