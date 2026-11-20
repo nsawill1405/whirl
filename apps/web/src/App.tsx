@@ -128,7 +128,7 @@ export default function App() {
     if (start) { updateScene(start.scene); setSelected(start.selected); setSource(start.source); setTool(start.tool); undoStack.current = start.undo; redoStack.current = start.redo; renderHistory(v => v + 1); }
     drag.current = null; setMarquee(null);
   };
-  const fitText = (n: Shape) => { const ctx = canvas.current?.getContext('2d'); return ctx ? growText(n, ctx) : n; };
+  const fitText = (n: Shape, previous?: Shape) => { const ctx = canvas.current?.getContext('2d'); return ctx ? growText(n, ctx, previous) : n; };
   const onDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     // Commit an open text draft before taking the reversible touch baseline.
     const committed = editing ? editDone() : undefined;
@@ -207,7 +207,7 @@ export default function App() {
   const editDone = () => {
     if (!editing || !latest.current) return;
     const b = latest.current, node = b.nodes.find(n => n.id === editing.id), existing = node ?? b.edges.find(e => e.id === editing.id);
-    const next = node ? fitText({ ...node, text: editing.text }) : null;
+    const next = node ? fitText({ ...node, text: editing.text }, node) : null;
     let committed: Scene | undefined;
     if (existing && (existing.text !== editing.text || (node && next?.height !== node.height))) { committed = { nodes: b.nodes.map(n => n.id === editing.id && next ? next : n), edges: b.edges.map(e => e.id === editing.id ? { ...e, text: editing.text } : e) }; change(committed); }
     setEditing(null);
@@ -247,7 +247,7 @@ export default function App() {
     else { const b = bounds(board.nodes), scale = Math.min(2, 8000 / Math.max(b.width + 120, b.height + 120)), c = document.createElement('canvas'); c.width = (b.width + 120) * scale; c.height = (b.height + 120) * scale; paint(c.getContext('2d')!, board, { zoom: scale, x: (-b.x + 60) * scale, y: (-b.y + 60) * scale }, c.width, c.height, [], false, false, images.current); c.toBlob(blob => { if (blob) download(blob, `${name}.png`); else notify('Could not export this image. Try SVG instead.'); }); }
   };
   const chosenNode = board?.nodes.find(n => n.id === selected[0]), chosenEdge = board?.edges.find(e => e.id === selected[0]);
-  const editNode = board?.nodes.find(n => n.id === editing?.id), editEdge = board?.edges.find(e => e.id === editing?.id), editPos = editNode ? fitText({ ...editNode, text: editing!.text }) : editEdge && board ? { ...edgeMiddle(route(editEdge, board.nodes)), width: 160, height: 48 } : null;
+  const editNode = board?.nodes.find(n => n.id === editing?.id), editEdge = board?.edges.find(e => e.id === editing?.id), editPos = editNode ? fitText({ ...editNode, text: editing!.text }, editNode) : editEdge && board ? { ...edgeMiddle(route(editEdge, board.nodes)), width: 160, height: 48 } : null;
   return <div className={`app ${dark ? 'dark' : ''}`}>
     <header className="topbar">
       <button className="brand" onClick={() => setModal('boards')} title="Your boards"><img src="/icon.svg" alt=""/><span>whirl<span className="brand-dot">.</span></span></button>

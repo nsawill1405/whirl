@@ -23,8 +23,13 @@ describe('brainstorm text layout', () => {
     expect(growText(rect, ctx)).toBe(rect);
   });
   it('shrinks a shortened text label to its content instead of leaving an invisible hitbox', () => {
-    const label = { ...makeShape('text', 0, 0), width: 48, height: 500, text: 'Hi' };
-    expect(growText(label, ctx).height).toBe(51);
+    const previous = growText({ ...makeShape('text', 0, 0), width: 48 }, ctx);
+    expect(growText({ ...previous, text: 'Hi' }, ctx, previous).height).toBe(51);
+  });
+  it('preserves deliberately resized text heights during resizing and editing', () => {
+    const label = { ...makeShape('text', 0, 0), height: 400, text: 'Hi' };
+    expect(growText(label, ctx).height).toBe(400);
+    expect(growText({ ...label, text: 'Hello' }, ctx, label).height).toBe(400);
   });
   it('wraps long words and preserves explicit blank lines', () => {
     expect(wrap('abcdef\n\nhi', 24, s => s.length * 8)).toEqual(['abc', 'def', '', 'hi']);

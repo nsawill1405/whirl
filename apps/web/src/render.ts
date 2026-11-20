@@ -12,11 +12,12 @@ export function wrap(text: string, width: number, measure: (s: string) => number
 }
 export const textSize = (n: Shape) => n.kind === 'text' ? 24 : n.kind === 'sticky' ? 16 : 14;
 export const textFont = (n: Shape) => `${n.kind === 'text' ? 600 : 500} ${textSize(n)}px system-ui`;
-export function growText(n: Shape, ctx: CanvasRenderingContext2D): Shape {
+export function growText(n: Shape, ctx: CanvasRenderingContext2D, previous?: Shape): Shape {
   if (n.kind !== 'sticky' && n.kind !== 'text') return n;
   ctx.font = textFont(n);
-  const lines = wrap(n.text, n.width - 24, s => ctx.measureText(s).width);
-  return { ...n, height: Math.max(n.kind === 'text' ? 40 : n.height, Math.ceil(lines.length * textSize(n) * 1.45 + 16)) };
+  const required = (shape: Shape) => Math.ceil(wrap(shape.text, shape.width - 24, s => ctx.measureText(s).width).length * textSize(shape) * 1.45 + 16);
+  const minimum = n.kind === 'text' && previous && previous.height <= required(previous) ? 40 : n.height;
+  return { ...n, height: Math.max(minimum, required(n)) };
 }
 function visibleLines(n: Shape, measure: (s: string) => number) {
   const width = n.width * (n.kind === 'diamond' ? 0.57 : 1) - 24;
