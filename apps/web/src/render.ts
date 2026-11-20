@@ -10,6 +10,25 @@ export function wrap(text: string, width: number, measure: (s: string) => number
     lines.push(line); return lines;
   });
 }
+export const textSize = (n: Shape) => n.kind === 'text' ? 24 : n.kind === 'sticky' ? 16 : 14;
+export const textFont = (n: Shape) => `${n.kind === 'text' ? 600 : 500} ${textSize(n)}px system-ui`;
+export function growText(n: Shape, ctx: CanvasRenderingContext2D, previous?: Shape): Shape {
+  if (n.kind !== 'sticky' && n.kind !== 'text') return n;
+  ctx.font = textFont(n);
+  const required = (shape: Shape) => Math.ceil(wrap(shape.text, shape.width - 24, s => ctx.measureText(s).width).length * textSize(shape) * 1.45 + 16);
+  const minimum = n.kind === 'text' && previous && previous.height === required(previous) ? 40 : n.height;
+  return { ...n, height: Math.max(minimum, required(n)) };
+}
+function visibleLines(n: Shape, measure: (s: string) => number) {
+  const width = n.width * (n.kind === 'diamond' ? 0.57 : 1) - 24;
+  const lines = wrap(n.text, width, measure), count = Math.max(1, Math.floor((n.height - 16) / (textSize(n) * 1.45)));
+  if (lines.length <= count) return lines;
+  const visible = lines.slice(0, count);
+  let last = visible[count - 1];
+  while (last && measure(last + '…') > width) last = last.slice(0, -1);
+  visible[count - 1] = last + '…';
+  return visible;
+}
 export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, width: number, height: number, selected: string[] = [], dark = false, grid = true, images = new Map<string, HTMLImageElement>()) {
   const bg = dark ? '#20202a' : '#faf9f6', ink = dark ? '#c5c1dc' : '#9992b2', accent = '#7967e9';
   ctx.clearRect(0, 0, width, height); ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
@@ -40,10 +59,9 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
     }
     if (n.text) {
       ctx.fillStyle = n.kind === 'text' && dark ? '#eeeaf7' : '#3e3655';
-      const size = n.kind === 'text' ? 24 : n.kind === 'sticky' ? 16 : 14;
-      ctx.font = `${n.kind === 'text' ? 600 : 500} ${size}px system-ui`;
-      const maxWidth = n.width * (n.kind === 'diamond' ? 0.57 : 1) - 24;
-      const lines = wrap(n.text, maxWidth, s => ctx.measureText(s).width).slice(0, Math.max(1, Math.floor((n.height - 16) / (size * 1.45))));
+      const size = textSize(n);
+      ctx.font = textFont(n);
+      const lines = visibleLines(n, s => ctx.measureText(s).width);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       lines.forEach((line, i) => ctx.fillText(line, n.x + n.width / 2, n.y + n.height / 2 + (i - (lines.length - 1) / 2) * size * 1.45));
     }
@@ -59,10 +77,10 @@ const escape = (s: string) => s.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&
 function shapeSvg(n: Shape) {
   const attrs = `fill="${n.color}" stroke="#b9b2c8" stroke-width="1.4"`;
   const shape = n.kind === 'text' ? '' : n.kind === 'ellipse' ? `<ellipse cx="${n.x + n.width / 2}" cy="${n.y + n.height / 2}" rx="${n.width / 2}" ry="${n.height / 2}" ${attrs}/>` : n.kind === 'diamond' ? `<polygon points="${n.x + n.width / 2},${n.y} ${n.x + n.width},${n.y + n.height / 2} ${n.x + n.width / 2},${n.y + n.height} ${n.x},${n.y + n.height / 2}" ${attrs}/>` : `<rect x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" rx="${n.kind === 'sticky' ? 3 : 10}" ${attrs}/>`;
-  const size = n.kind === 'text' ? 24 : n.kind === 'sticky' ? 16 : 14;
-  const ctx = document.createElement('canvas').getContext('2d')!; ctx.font = `${n.kind === 'text' ? 600 : 500} ${size}px system-ui`;
-  const lines = wrap(n.text, n.width * (n.kind === 'diamond' ? 0.57 : 1) - 24, s => ctx.measureText(s).width).slice(0, Math.max(1, Math.floor((n.height - 16) / (size * 1.45))));
-  return shape + (n.image ? `<image href="${escape(n.image)}" x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" preserveAspectRatio="none"/>` : '') + lines.map((line, i) => `<text x="${n.x + n.width / 2}" y="${n.y + n.height / 2 + (i - (lines.length - 1) / 2) * size * 1.45}" text-anchor="middle" dominant-baseline="central" fill="#3e3655" font-family="system-ui,sans-serif" font-weight="500" font-size="${size}">${escape(line)}</text>`).join('');
+  const size = textSize(n);
+  const ctx = document.createElement('canvas').getContext('2d')!; ctx.font = textFont(n);
+  const lines = visibleLines(n, s => ctx.measureText(s).width);
+  return shape + (n.image ? `<image href="${escape(n.image)}" x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" preserveAspectRatio="none"/>` : '') + lines.map((line, i) => `<text x="${n.x + n.width / 2}" y="${n.y + n.height / 2 + (i - (lines.length - 1) / 2) * size * 1.45}" text-anchor="middle" dominant-baseline="central" fill="#3e3655" font-family="system-ui,sans-serif" font-weight="${n.kind === 'text' ? 600 : 500}" font-size="${size}">${escape(line)}</text>`).join('');
 }
 export function svg(scene: Scene) {
   const b = bounds(scene.nodes), pad = 60;
