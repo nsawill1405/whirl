@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { bounds, contains, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, route, type Board } from '../packages/scene/src';
+import { describe, expect, it, vi } from 'vitest';
+import { bounds, contains, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, route, uid, type Board } from '../packages/scene/src';
 const shape = (id: string, x: number, y: number) => ({ ...makeShape('rectangle', x, y), id, width: 100, height: 80 });
 describe('scene graph', () => {
+  it('creates unique identifiers on HTTP origins without randomUUID', () => {
+    const getRandomValues = crypto.getRandomValues.bind(crypto);
+    vi.stubGlobal('crypto', { getRandomValues });
+    try { const a = uid(), b = uid(); expect(a).toMatch(/^[a-f0-9]{32}$/); expect(a).not.toBe(b); } finally { vi.unstubAllGlobals(); }
+  });
   it('hit tests the actual outline and chooses the topmost shape', () => {
     const rect = shape('rect', 0, 0), ellipse = { ...rect, id: 'ellipse', kind: 'ellipse' as const }, diamond = { ...rect, kind: 'diamond' as const };
     expect(contains(rect, { x: 1, y: 1 })).toBe(true);

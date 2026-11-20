@@ -4,7 +4,7 @@ export type Shape = Point & { id: string; kind: Kind; width: number; height: num
 export type Connector = { id: string; source: string; target: string; text: string };
 export type Board = { id: string; title: string; nodes: Shape[]; edges: Connector[]; updatedAt: number };
 export type Scene = Pick<Board, 'nodes' | 'edges'>;
-export const uid = () => crypto.randomUUID();
+export const uid = () => typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), v => v.toString(16).padStart(2, '0')).join('');
 export const COLORS = ['#ffffff', '#eee9ff', '#e5f3ee', '#fff2cc', '#ffe6dc', '#e4efff'];
 export function makeShape(kind: Kind, x: number, y: number): Shape {
   return { id: uid(), kind, x, y, width: kind === 'sticky' ? 176 : kind === 'text' ? 220 : 184, height: kind === 'sticky' ? 152 : kind === 'text' ? 64 : kind === 'diamond' ? 128 : 88, text: kind === 'sticky' ? 'A bright idea' : kind === 'text' ? 'Add your thoughts' : '', color: kind === 'sticky' ? COLORS[3] : COLORS[0] };
