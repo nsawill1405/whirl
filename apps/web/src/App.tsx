@@ -106,6 +106,7 @@ export default function App() {
   const screenPoint = (e: ReactPointerEvent) => { const r = canvas.current!.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const world = (p: Point) => ({ x: (p.x - view.x) / view.zoom, y: (p.y - view.y) / view.zoom });
   const onDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (editing) { editDone(); return; }
     if (!board || e.button > 1) return;
     setExportOpen(false); e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId);
     const screen = screenPoint(e), start = world(screen), n = hitNode(board.nodes, start);
