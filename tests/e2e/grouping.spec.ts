@@ -42,6 +42,10 @@ for (const modifier of ['Control', 'Meta']) {
     await expect(page.getByText('Group · 2 shapes', { exact: true })).toBeVisible();
     const grouped = await board(page), id = grouped.nodes[0].groupId;
     expect(id).toBeTruthy(); expect(grouped.nodes[1].groupId).toBe(id); expect(grouped.nodes[2].groupId).toBeUndefined();
+    const groupedPoint = (await coordinates(page, grouped))(191, 245);
+    await page.mouse.dblclick(groupedPoint.x, groupedPoint.y);
+    await expect(page.getByRole('textbox', { name: 'Shape text' })).toHaveCount(0);
+    await expect(page.getByText('Group · 2 shapes', { exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
     let point = await coordinates(page, grouped), start = point(191, 245);
     await page.mouse.move(start.x, start.y); await page.mouse.down(); await page.mouse.move(start.x + 80, start.y + 48, { steps: 5 }); await page.mouse.up();
