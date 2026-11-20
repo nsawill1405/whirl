@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowDownToLine, ArrowRight, ArrowUpRight, Check, ChevronDown, Circle, Copy, Diamond, Download, FolderOpen, Hand, HelpCircle, ImagePlus, Layers, Maximize, Minus, Moon, MousePointer2, MoveUpRight, Plus, Redo2, RotateCcw, Shapes, Sparkles, Square, StickyNote, Sun, Trash2, Type, Undo2, X, Github, LayoutTemplate, PanelLeftClose } from 'lucide-react';
-import { bounds, COLORS, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, route, uid, type Board, type Connector, type Kind, type Point, type Scene, type Shape } from '@whirl/scene';
+import { bounds, COLORS, MAX_IMAGE_BYTES, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, route, uid, type Board, type Connector, type Kind, type Point, type Scene, type Shape } from '@whirl/scene';
 import { download, paint, svg, type View } from './render';
 import { template } from './templates';
 import { loadBoards, saveBoards } from './storage';
@@ -147,8 +147,8 @@ export default function App() {
   const importFile = async (file?: File) => {
     if (!file || !board) return;
     try {
-      if (file.size > 12000000) throw new Error('Choose a file smaller than 12 MB.');
       if (file.type.startsWith('image/')) {
+        if (file.size > MAX_IMAGE_BYTES) throw new Error('Choose an image smaller than 12 MB.');
         if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Use a PNG, JPEG, or WebP image.');
         const data = await new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.onerror = reject; r.readAsDataURL(file); });
         const img = new Image(); img.src = data; await img.decode(); const scale = Math.min(1, 440 / Math.max(img.width, img.height)); const n = { ...makeShape('image', (size.width / 2 - view.x) / view.zoom, (size.height / 2 - view.y) / view.zoom), width: Math.max(48, img.width * scale), height: Math.max(40, img.height * scale), image: data }; const b = latest.current!; change({ ...snapshot(b), nodes: [...b.nodes, n] }); setSelected([n.id]);

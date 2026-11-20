@@ -29,3 +29,16 @@ test('templates preserve existing boards and invalid imports do not replace data
 test('small screens keep drawing tools, zoom, and templates reachable', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 780 }); await page.goto('/'); await expect(page.getByRole('button', { name: 'Rectangle (R)' })).toBeInViewport(); await expect(page.getByRole('button', { name: 'Zoom in', exact: true })).toBeInViewport(); await page.getByRole('button', { name: 'Templates', exact: true }).click(); await expect(page.getByRole('dialog')).toBeVisible(); await expect(page.getByRole('button', { name: /A clean slate/ })).toBeInViewport();
 });
+test('large embedded image backups round-trip without the image-upload byte limit', async ({ page }) => {
+  await blank(page);
+  const fs = await import('node:fs/promises');
+  const png = await fs.readFile('apps/web/public/icon-192.png');
+  await page.locator('input[type=file]').setInputFiles({ name: 'large.png', mimeType: 'image/png', buffer: Buffer.concat([png, Buffer.alloc(10_700_000)]) });
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /1 shapes/);
+  const downloaded = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export' }).click(); await page.getByRole('button', { name: /Whirl board/ }).click();
+  const file = await downloaded, buffer = await fs.readFile((await file.path())!);
+  expect(buffer.length).toBeGreaterThan(14_000_000);
+  await page.locator('input[type=file]').setInputFiles({ name: 'restored.json', mimeType: 'application/json', buffer });
+  await expect(page.getByRole('status')).toContainText('Board imported');
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /1 shapes/);
+});
