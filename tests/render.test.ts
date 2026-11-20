@@ -38,6 +38,11 @@ describe('brainstorm text layout', () => {
     expect(wider.height).toBe(51);
     expect(growText({ ...label, height: 600 }, ctx).height).toBe(600);
   });
+  it('keeps a saved fixed-height label when widening resolves its overflow', () => {
+    const label = { ...makeShape('text', 0, 0), width: 48, height: 400, text: 'A long legacy label with wrapped overflow' };
+    const wider = growText({ ...label, width: 600 }, ctx, label);
+    expect(wider.height).toBe(400);
+  });
   it('wraps long words and preserves explicit blank lines', () => {
     expect(wrap('abcdef\n\nhi', 24, s => s.length * 8)).toEqual(['abc', 'def', '', 'hi']);
   });

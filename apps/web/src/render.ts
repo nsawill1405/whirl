@@ -16,7 +16,7 @@ export function growText(n: Shape, ctx: CanvasRenderingContext2D, previous?: Sha
   if (n.kind !== 'sticky' && n.kind !== 'text') return n;
   ctx.font = textFont(n);
   const required = (shape: Shape) => Math.ceil(wrap(shape.text, shape.width - 24, s => ctx.measureText(s).width).length * textSize(shape) * 1.45 + 16);
-  const minimum = n.kind === 'text' && previous && previous.height <= required(previous) ? 40 : n.height;
+  const minimum = n.kind === 'text' && previous && previous.height === required(previous) ? 40 : n.height;
   return { ...n, height: Math.max(minimum, required(n)) };
 }
 function visibleLines(n: Shape, measure: (s: string) => number) {
