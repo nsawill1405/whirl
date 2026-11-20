@@ -129,10 +129,12 @@ export default function App() {
     drag.current = null; setMarquee(null);
   };
   const onDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    // Commit an open text draft before taking the reversible touch baseline.
+    const committed = editing ? editDone() : undefined;
     if (e.pointerType === 'touch' && board) {
       e.preventDefault(); setTouchInput(true); e.currentTarget.setPointerCapture(e.pointerId);
       touches.current.set(e.pointerId, screenPoint(e));
-      if (touches.current.size === 1) touchStart.current = { scene: snapshot(board), selected, source, undo: [...undoStack.current], redo: [...redoStack.current] };
+      if (touches.current.size === 1) touchStart.current = { scene: committed ?? snapshot(board), selected, source, undo: [...undoStack.current], redo: [...redoStack.current] };
       else {
         if (!gesture.current) cancelTouchEdit();
         gesture.current = { ...touchGeometry(touches.current), view };
@@ -141,7 +143,7 @@ export default function App() {
       // Do not resume editing with the remaining finger after a pinch.
       if (gesture.current) return;
     }
-    if (editing) { editDone(); return; }
+    if (editing) return;
     if (!board || e.button > 1) return;
     setExportOpen(false); e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId);
     const screen = screenPoint(e), start = world(screen), n = hitNode(board.nodes, start);
@@ -201,7 +203,7 @@ export default function App() {
       if (!touches.current.size) { gesture.current = null; touchStart.current = null; }
     } else { const d = drag.current; if (d && ['move', 'resize', 'create'].includes(d.type)) updateScene(d.scene); drag.current = null; setMarquee(null); }
   };
-  const editDone = () => { if (!editing || !latest.current) return; const b = latest.current, existing = b.nodes.find(n => n.id === editing.id) ?? b.edges.find(e => e.id === editing.id); if (existing && existing.text !== editing.text) change({ nodes: b.nodes.map(n => n.id === editing.id ? { ...n, text: editing.text } : n), edges: b.edges.map(e => e.id === editing.id ? { ...e, text: editing.text } : e) }); setEditing(null); };
+  const editDone = () => { if (!editing || !latest.current) return; const b = latest.current, existing = b.nodes.find(n => n.id === editing.id) ?? b.edges.find(e => e.id === editing.id); let committed: Scene | undefined; if (existing && existing.text !== editing.text) { committed = { nodes: b.nodes.map(n => n.id === editing.id ? { ...n, text: editing.text } : n), edges: b.edges.map(e => e.id === editing.id ? { ...e, text: editing.text } : e) }; change(committed); } setEditing(null); return committed; };
   const zoomBy = (factor: number) => setView(v => { const zoom = Math.min(3, Math.max(0.1, v.zoom * factor)); return { zoom, x: size.width / 2 - (size.width / 2 - v.x) * zoom / v.zoom, y: size.height / 2 - (size.height / 2 - v.y) * zoom / v.zoom }; });
   const newBoard = (kind: 'blank' | 'welcome' | 'flowchart' | 'retro') => { editDone(); const b = template(kind); setBoards(list => [b, ...list]); setActive(b.id); setModal(null); };
   const importFile = async (file?: File) => {

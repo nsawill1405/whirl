@@ -95,6 +95,24 @@ test.describe('phone touch navigation', () => {
     await expect(page.locator('canvas')).toHaveAttribute('aria-label', /0 shapes/);
   });
 
+  test('pinching outside a text editor keeps the committed draft and its undo history', async ({ page, context }) => {
+    await startBlank(page);
+    await page.getByRole('button', { name: 'Rectangle (R)', exact: true }).tap();
+    await page.locator('canvas').tap({ position: { x: 40, y: 190 } });
+    await page.getByRole('button', { name: 'Edit text', exact: true }).tap();
+    await page.getByRole('textbox', { name: 'Shape text' }).fill('Keep this draft');
+    const client = await context.newCDPSession(page);
+    const a = { id: 1, x: 100, y: 440 }, b = { id: 2, x: 260, y: 440 };
+    await touch(client, 'touchStart', [a]);
+    await touch(client, 'touchStart', [a, b]);
+    await touch(client, 'touchMove', [{ ...a, x: 80 }, { ...b, x: 280 }]);
+    await touch(client, 'touchEnd', []);
+    await expect(page.getByRole('textbox', { name: 'Shape text' })).toHaveCount(0);
+    expect((await scene(page)).nodes[0].text).toBe('Keep this draft');
+    await page.getByRole('button', { name: 'Undo', exact: true }).tap();
+    expect((await scene(page)).nodes[0].text).toBe('');
+  });
+
   test('canceling a touch discards an unfinished shape', async ({ page, context }) => {
     await startBlank(page);
     await page.getByRole('button', { name: 'Rectangle (R)', exact: true }).tap();
