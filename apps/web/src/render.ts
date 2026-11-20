@@ -1,4 +1,4 @@
-import { bounds, edgeMiddle, route, type Scene, type Shape, type Point } from '@whirl/scene';
+import { normalizeUrl, bounds, edgeMiddle, route, type Scene, type Shape, type Point } from '@whirl/scene';
 export type View = Point & { zoom: number };
 export function gridSize(zoom: number) {
   const step = 24 * zoom;
@@ -33,6 +33,13 @@ function visibleLines(n: Shape, measure: (s: string) => number) {
   visible[count - 1] = last + '…';
   return visible;
 }
+function ellipsis(text: string, width: number, measure: (s: string) => number) {
+  if (measure(text) <= width) return text;
+  while (text && measure(text + '…') > width) text = text.slice(0, -1);
+  return width > measure('…') ? text + '…' : '';
+}
+const linkGlyph = 'M8 12a5 5 0 0 0 7 .4l3-3a5 5 0 0 0-7-7l-2 2 M12 8a5 5 0 0 0-7-.4l-3 3a5 5 0 0 0 7 7l2-2';
+const linkLabel = (n: Shape) => { const url = n.url && normalizeUrl(n.url); return url ? new URL(url).hostname.replace(/^www\./, '') : 'Link'; };
 export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, width: number, height: number, selected: string[] = [], dark = false, grid = true, images = new Map<string, HTMLImageElement>()) {
   const bg = dark ? '#20202a' : '#faf9f6', ink = dark ? '#c5c1dc' : '#9992b2', accent = '#7967e9';
   ctx.clearRect(0, 0, width, height); ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
@@ -57,11 +64,17 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
     else ctx.roundRect(n.x, n.y, n.width, n.height, n.kind === 'sticky' ? 3 : 10);
     if (n.kind !== 'text') {
       if (n.kind === 'sticky') { ctx.shadowColor = '#30284b16'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4; }
-      ctx.fillStyle = n.color; ctx.fill(); ctx.shadowColor = 'transparent';
+      ctx.fillStyle = n.kind === 'link' && dark ? '#302e3e' : n.color; ctx.fill(); ctx.shadowColor = 'transparent';
       ctx.strokeStyle = n.kind === 'sticky' ? '#0000000d' : '#62587942'; ctx.lineWidth = 1.4; ctx.stroke();
       if (n.kind === 'image' && n.image) { const img = images.get(n.image); if (img?.complete && img.naturalWidth) { ctx.save(); ctx.clip(); ctx.drawImage(img, n.x, n.y, n.width, n.height); ctx.restore(); } }
     }
-    if (n.text) {
+    if (n.kind === 'link') {
+      ctx.save(); ctx.clip(); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.save(); ctx.translate(n.x + 16, n.y + n.height / 2 - 10); ctx.strokeStyle = dark ? '#b9aaff' : '#7967e9'; ctx.lineWidth = 1.7; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(new Path2D(linkGlyph)); ctx.restore();
+      ctx.font = '600 14px system-ui'; ctx.fillStyle = dark ? '#eeeaf7' : '#3e3655'; ctx.fillText(ellipsis(n.text, n.width - 64, s => ctx.measureText(s).width), n.x + 48, n.y + n.height / 2 - 10);
+      ctx.font = '12px system-ui'; ctx.fillStyle = dark ? '#b4aec8' : '#82798f'; ctx.fillText(ellipsis(linkLabel(n), n.width - 64, s => ctx.measureText(s).width), n.x + 48, n.y + n.height / 2 + 13);
+      ctx.restore();
+    } else if (n.text) {
       ctx.fillStyle = n.kind === 'text' && dark ? '#eeeaf7' : '#3e3655';
       const size = textSize(n);
       ctx.font = textFont(n);
@@ -85,6 +98,12 @@ function shapeSvg(n: Shape) {
   const shape = n.kind === 'text' ? '' : n.kind === 'ellipse' ? `<ellipse cx="${n.x + n.width / 2}" cy="${n.y + n.height / 2}" rx="${n.width / 2}" ry="${n.height / 2}" ${attrs}/>` : n.kind === 'diamond' ? `<polygon points="${n.x + n.width / 2},${n.y} ${n.x + n.width},${n.y + n.height / 2} ${n.x + n.width / 2},${n.y + n.height} ${n.x},${n.y + n.height / 2}" ${attrs}/>` : `<rect x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" rx="${n.kind === 'sticky' ? 3 : 10}" ${attrs}/>`;
   const size = textSize(n);
   const ctx = document.createElement('canvas').getContext('2d')!; ctx.font = textFont(n);
+  if (n.kind === 'link') {
+    ctx.font = '600 14px system-ui'; const title = ellipsis(n.text, n.width - 64, s => ctx.measureText(s).width);
+    ctx.font = '12px system-ui'; const label = ellipsis(linkLabel(n), n.width - 64, s => ctx.measureText(s).width), url = n.url && normalizeUrl(n.url);
+    const card = shape + `<path d="${linkGlyph}" transform="translate(${n.x + 16} ${n.y + n.height / 2 - 10})" fill="none" stroke="#7967e9" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><text x="${n.x + 48}" y="${n.y + n.height / 2 - 6}" fill="#3e3655" font-family="system-ui" font-size="14" font-weight="600">${escape(title)}</text><text x="${n.x + 48}" y="${n.y + n.height / 2 + 17}" fill="#82798f" font-family="system-ui" font-size="12">${escape(label)}</text>`;
+    return url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${card}</a>` : card;
+  }
   const lines = visibleLines(n, s => ctx.measureText(s).width);
   return shape + (n.image ? `<image href="${escape(n.image)}" x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" preserveAspectRatio="none"/>` : '') + lines.map((line, i) => `<text x="${n.x + n.width / 2}" y="${n.y + n.height / 2 + (i - (lines.length - 1) / 2) * size * 1.45}" text-anchor="middle" dominant-baseline="central" fill="#3e3655" font-family="system-ui,sans-serif" font-weight="${n.kind === 'text' ? 600 : 500}" font-size="${size}">${escape(line)}</text>`).join('');
 }

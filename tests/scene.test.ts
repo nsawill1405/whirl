@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
-import { bounds, cloneScene, contains, edgeMiddle, expandSelection, groupShapes, hitEdge, hitNode, makeShape, parseBoard, resizeSelection, route, selectionScene, uid, type Board } from '../packages/scene/src';
+import { normalizeUrl, bounds, cloneScene, contains, edgeMiddle, expandSelection, groupShapes, hitEdge, hitNode, makeShape, parseBoard, resizeSelection, route, selectionScene, uid, type Board } from '../packages/scene/src';
 const shape = (id: string, x: number, y: number) => ({ ...makeShape('rectangle', x, y), id, width: 100, height: 80 });
 describe('scene graph', () => {
+  it('normalizes web URLs and rejects empty, malformed, and unsafe values', () => {
+    expect(normalizeUrl(' example.com/x ')).toBe('https://example.com/x');
+    expect(normalizeUrl('http://www.example.com/a?q=1')).toBe('http://www.example.com/a?q=1');
+    for (const value of ['', '   ', 'not a url', 'hello', 'https://', 'javascript:alert(1)', 'data:text/html,hi', 'ftp://example.com']) expect(normalizeUrl(value)).toBeNull();
+  });
+  it('imports link cards but rejects unsafe URLs on any shape', () => {
+    const node = { ...makeShape('link', 0, 0), url: 'https://example.com/a?x=1&y=2' }, board = { title: 'Links', nodes: [node], edges: [] };
+    expect(parseBoard(board).nodes[0]).toEqual(node);
+    expect(parseBoard({ ...board, nodes: [{ ...node, url: undefined }] }).nodes[0].url).toBeUndefined();
+    for (const url of ['javascript:alert(1)', 'data:text/html,hi', 'example.com', '', 42]) expect(() => parseBoard({ ...board, nodes: [{ ...node, url }] })).toThrow();
+    expect(() => parseBoard({ ...board, nodes: [{ ...node, kind: 'rectangle', url: 'javascript:alert(1)' }] })).toThrow();
+  });
   it('creates unique identifiers on HTTP origins without randomUUID', () => {
     const getRandomValues = crypto.getRandomValues.bind(crypto);
     vi.stubGlobal('crypto', { getRandomValues });
