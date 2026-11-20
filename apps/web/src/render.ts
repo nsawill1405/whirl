@@ -1,4 +1,5 @@
 import { normalizeUrl, bounds, COLORS, edgeMiddle, route, type Scene, type Shape, type Point } from '@whirl/scene';
+import { documentBadge } from './documents';
 export type View = Point & { zoom: number };
 export function gridSize(zoom: number) {
   const step = 24 * zoom;
@@ -68,6 +69,14 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
       ctx.strokeStyle = n.kind === 'sticky' ? '#0000000d' : '#62587942'; ctx.lineWidth = 1.4; ctx.stroke();
       if (n.kind === 'image' && n.image) { const img = images.get(n.image); if (img?.complete && img.naturalWidth) { ctx.save(); ctx.clip(); ctx.drawImage(img, n.x, n.y, n.width, n.height); ctx.restore(); } }
     }
+    if (n.kind === 'document' && n.file) {
+      const badge = documentBadge(n.file.name), img = images.get(n.file.data), footer = Math.min(48, n.height / 3);
+      ctx.save(); ctx.clip(); ctx.fillStyle = '#f3f2f6'; ctx.fillRect(n.x, n.y, n.width, n.height - footer);
+      if (img?.complete && img.naturalWidth) { const scale = Math.min((n.width - 16) / img.naturalWidth, (n.height - footer - 16) / img.naturalHeight), w = img.naturalWidth * scale, h = img.naturalHeight * scale; ctx.drawImage(img, n.x + (n.width - w) / 2, n.y + (n.height - footer - h) / 2, w, h); }
+      else { ctx.fillStyle = badge.color; ctx.font = 'bold 32px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(badge.label, n.x + n.width / 2, n.y + (n.height - footer) / 2, n.width - 16); }
+      ctx.fillStyle = '#fff'; ctx.fillRect(n.x, n.y + n.height - footer, n.width, footer); ctx.fillStyle = badge.color; ctx.fillRect(n.x + 10, n.y + n.height - footer + 12, 42, 24); ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff'; ctx.fillText(badge.label, n.x + 31, n.y + n.height - footer + 24, 38);
+      ctx.font = '12px system-ui'; ctx.textAlign = 'left'; ctx.fillStyle = '#3e3655'; let name = n.file.name; while (name.length && ctx.measureText(name).width > n.width - 76) name = name.slice(0, -1); ctx.fillText(name === n.file.name ? name : name + '…', n.x + 62, n.y + n.height - footer + 24); ctx.restore();
+    }
     if (n.kind === 'link') {
       const darkCard = dark && n.color === COLORS[0];
       ctx.save(); ctx.clip(); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -75,7 +84,7 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
       ctx.font = '600 14px system-ui'; ctx.fillStyle = darkCard ? '#eeeaf7' : '#3e3655'; ctx.fillText(ellipsis(n.text, n.width - 64, s => ctx.measureText(s).width), n.x + 48, n.y + n.height / 2 - 10);
       ctx.font = '12px system-ui'; ctx.fillStyle = darkCard ? '#b4aec8' : '#82798f'; ctx.fillText(ellipsis(linkLabel(n), n.width - 64, s => ctx.measureText(s).width), n.x + 48, n.y + n.height / 2 + 13);
       ctx.restore();
-    } else if (n.text) {
+    } else if (n.text && n.kind !== 'document') {
       ctx.fillStyle = n.kind === 'text' && dark ? '#eeeaf7' : '#3e3655';
       const size = textSize(n);
       ctx.font = textFont(n);
@@ -95,6 +104,7 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
 }
 const escape = (s: string) => s.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]!));
 function shapeSvg(n: Shape) {
+  if (n.kind === 'document' && n.file) { const badge = documentBadge(n.file.name); return `<rect x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" rx="10" fill="#f3f2f6" stroke="#b9b2c8"/><text x="${n.x + 16}" y="${n.y + n.height / 2}" fill="${badge.color}" font-family="system-ui" font-size="28">${badge.label}</text><rect x="${n.x + 10}" y="${n.y + n.height - 36}" width="42" height="24" fill="${badge.color}"/><text x="${n.x + 31}" y="${n.y + n.height - 20}" text-anchor="middle" fill="#ffffff" font-family="system-ui" font-size="10">${badge.label}</text><text x="${n.x + 62}" y="${n.y + n.height - 20}" fill="#3e3655" font-family="system-ui" font-size="12">${escape(n.file.name.slice(0, Math.max(1, Math.floor((n.width - 76) / 8))))}</text>`; }
   const attrs = `fill="${n.color}" stroke="#b9b2c8" stroke-width="1.4"`;
   const shape = n.kind === 'text' ? '' : n.kind === 'ellipse' ? `<ellipse cx="${n.x + n.width / 2}" cy="${n.y + n.height / 2}" rx="${n.width / 2}" ry="${n.height / 2}" ${attrs}/>` : n.kind === 'diamond' ? `<polygon points="${n.x + n.width / 2},${n.y} ${n.x + n.width},${n.y + n.height / 2} ${n.x + n.width / 2},${n.y + n.height} ${n.x},${n.y + n.height / 2}" ${attrs}/>` : `<rect x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" rx="${n.kind === 'sticky' ? 3 : 10}" ${attrs}/>`;
   const size = textSize(n);

@@ -1,12 +1,20 @@
 export type Point = { x: number; y: number };
-export type Kind = 'rectangle' | 'ellipse' | 'diamond' | 'sticky' | 'text' | 'image' | 'link';
-export type Shape = Point & { id: string; kind: Kind; width: number; height: number; text: string; color: string; image?: string; url?: string; groupId?: string };
+export type Kind = 'rectangle' | 'ellipse' | 'diamond' | 'sticky' | 'text' | 'image' | 'link' | 'document';
+export type DocumentFile = { name: string; type: string; size: number; data: string };
+export type Shape = Point & { id: string; kind: Kind; width: number; height: number; text: string; color: string; image?: string; url?: string; file?: DocumentFile; groupId?: string };
 export type Connector = { id: string; source: string; target: string; text: string };
 export type Board = { id: string; title: string; nodes: Shape[]; edges: Connector[]; updatedAt: number };
 export type Scene = Pick<Board, 'nodes' | 'edges'>;
 export const uid = () => typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), v => v.toString(16).padStart(2, '0')).join('');
 export const COLORS = ['#ffffff', '#eee9ff', '#e5f3ee', '#fff2cc', '#ffe6dc', '#e4efff'];
 export const MAX_IMAGE_BYTES = 12_000_000;
+export const MAX_DOCUMENT_BYTES = 25_000_000;
+export const DOCUMENT_TYPES: Record<string, string> = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ppt: 'application/vnd.ms-powerpoint', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel', odt: 'application/vnd.oasis.opendocument.text', odp: 'application/vnd.oasis.opendocument.presentation', ods: 'application/vnd.oasis.opendocument.spreadsheet', rtf: 'application/rtf', txt: 'text/plain', csv: 'text/csv', md: 'text/markdown' };
+export function validDocument(file: DocumentFile) {
+  if (!file || typeof file.name !== 'string' || !file.name.length || file.name.length > 255 || typeof file.type !== 'string' || typeof file.data !== 'string' || !Number.isInteger(file.size) || file.size < 0 || file.size > MAX_DOCUMENT_BYTES) return false;
+  const type = DOCUMENT_TYPES[file.name.split('.').pop()!.toLowerCase()];
+  return !!type && type === file.type && file.data.startsWith(`data:${type};base64,`) && file.data.length <= Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4 + 160 && /^[A-Za-z0-9+/]*={0,2}$/.test(file.data.slice(file.data.indexOf(',') + 1));
+}
 export const MAX_IMAGE_DATA_LENGTH = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64;
 export function normalizeUrl(input: string): string | null {
   const value = input.trim();
@@ -154,7 +162,8 @@ export function parseBoard(input: unknown): Board {
   if (!b || typeof b.title !== 'string' || b.title.length > 200 || !Array.isArray(b.nodes) || !Array.isArray(b.edges) || b.nodes.length > 3000 || b.edges.length > 6000) throw new Error('This is not a valid Whirl board.');
   const ids = new Set<string>();
   for (const n of b.nodes) {
-    if (!n || typeof n.id !== 'string' || ids.has(n.id) || !['rectangle','ellipse','diamond','sticky','text','image','link'].includes(n.kind) || ![n.x,n.y,n.width,n.height].every(v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1000000) || n.width < 24 || n.height < 24 || typeof n.text !== 'string' || n.text.length > 10000 || !/^#[\da-f]{6}$/i.test(n.color) || (n.image !== undefined && (typeof n.image !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(n.image) || n.image.length > MAX_IMAGE_DATA_LENGTH))) throw new Error('The board contains an invalid shape.');
+    if (n && ((n.kind === 'document' && !n.file) || (n.file !== undefined && !validDocument(n.file)))) throw new Error('The board contains an invalid document.');
+    if (!n || typeof n.id !== 'string' || ids.has(n.id) || !['rectangle','ellipse','diamond','sticky','text','image','link','document'].includes(n.kind) || ![n.x,n.y,n.width,n.height].every(v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1000000) || n.width < 24 || n.height < 24 || typeof n.text !== 'string' || n.text.length > 10000 || !/^#[\da-f]{6}$/i.test(n.color) || (n.image !== undefined && (typeof n.image !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(n.image) || n.image.length > MAX_IMAGE_DATA_LENGTH))) throw new Error('The board contains an invalid shape.');
     if (n.url !== undefined && (typeof n.url !== 'string' || !/^https?:\/\//i.test(n.url) || !normalizeUrl(n.url))) throw new Error('The board contains an invalid URL.');
     ids.add(n.id);
   }
