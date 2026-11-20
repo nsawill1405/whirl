@@ -76,6 +76,11 @@ test('Layers editing remains readable on narrow screens', async ({ page }) => {
   await page.locator('canvas').click({ position: { x: 100, y: 260 } });
   const editor = page.getByRole('textbox', { name: 'Shape text' });
   await editor.fill('Read this idea'); await editor.press('Enter');
+  await expect(page.locator('.selection-bar')).toBeVisible();
+  await page.getByRole('button', { name: 'Toggle layers' }).click();
+  await expect(page.locator('.selection-bar')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close layers', exact: true }).click();
+  await expect(page.locator('.selection-bar')).toBeVisible();
   await page.getByRole('button', { name: 'Toggle layers' }).click();
   await page.getByRole('complementary').getByRole('button', { name: 'Read this idea' }).click();
   await expect(page.getByRole('complementary')).toHaveCount(0);
