@@ -21,31 +21,49 @@ export function bounds(nodes: Shape[]) {
   const x = Math.min(...nodes.map(n => n.x)), y = Math.min(...nodes.map(n => n.y));
   return { x, y, width: Math.max(...nodes.map(n => n.x + n.width)) - x, height: Math.max(...nodes.map(n => n.y + n.height)) - y };
 }
-function anchor(n: Shape, other: Shape): { p: Point; out: Point } {
+function anchor(n: Shape, other: Shape, offset: number): { p: Point; out: Point } {
   const dx = other.x + other.width / 2 - n.x - n.width / 2, dy = other.y + other.height / 2 - n.y - n.height / 2;
+  const extent = (ratio: number) => n.kind === 'diamond' ? 1 - Math.abs(ratio) : n.kind === 'ellipse' ? Math.sqrt(1 - ratio * ratio) : 1;
   if (Math.abs(dx) / n.width >= Math.abs(dy) / n.height) {
-    const x = dx >= 0 ? n.x + n.width : n.x, y = n.y + n.height / 2;
-    return { p: { x, y }, out: { x: x + (dx >= 0 ? 20 : -20), y } };
+    const shift = offset * Math.min(1, n.height * 0.3 / 24), sign = dx >= 0 ? 1 : -1;
+    const x = n.x + n.width / 2 + sign * n.width / 2 * extent(shift / (n.height / 2)), y = n.y + n.height / 2 + shift;
+    return { p: { x, y }, out: { x: n.x + n.width / 2 + sign * (n.width / 2 + 20), y } };
   }
-  const x = n.x + n.width / 2, y = dy >= 0 ? n.y + n.height : n.y;
-  return { p: { x, y }, out: { x, y: y + (dy >= 0 ? 20 : -20) } };
+  const shift = offset * Math.min(1, n.width * 0.3 / 24), sign = dy >= 0 ? 1 : -1;
+  const x = n.x + n.width / 2 + shift, y = n.y + n.height / 2 + sign * n.height / 2 * extent(shift / (n.width / 2));
+  return { p: { x, y }, out: { x, y: n.y + n.height / 2 + sign * (n.height / 2 + 20) } };
 }
 function blocked(a: Point, b: Point, obstacles: Shape[]): boolean {
   return obstacles.some(n => a.x === b.x
     ? a.x > n.x - 10 && a.x < n.x + n.width + 10 && Math.max(a.y, b.y) > n.y - 10 && Math.min(a.y, b.y) < n.y + n.height + 10
     : a.y > n.y - 10 && a.y < n.y + n.height + 10 && Math.max(a.x, b.x) > n.x - 10 && Math.min(a.x, b.x) < n.x + n.width + 10);
 }
-const routeCache = new WeakMap<Shape[], Map<Connector, Point[]>>();
-export function route(edge: Connector, nodes: Shape[]): Point[] {
-  let cache = routeCache.get(nodes);
-  if (!cache) { cache = new Map(); routeCache.set(nodes, cache); }
-  const cached = cache.get(edge); if (cached) return cached;
-  const path = computeRoute(edge, nodes); cache.set(edge, path); return path;
+const noEdges: Connector[] = [];
+const laneCache = new WeakMap<Connector[], Map<Connector, number>>();
+const routeCache = new WeakMap<Shape[], WeakMap<Connector[], Map<Connector, Point[]>>>();
+function laneOffset(edge: Connector, edges: Connector[]) {
+  let lanes = laneCache.get(edges);
+  if (!lanes) {
+    lanes = new Map();
+    const pairs = new Map<string, Connector[]>();
+    for (const e of edges) { const key = JSON.stringify([e.source, e.target].sort()), group = pairs.get(key) ?? []; group.push(e); pairs.set(key, group); }
+    for (const group of pairs.values()) group.forEach((e, i) => lanes!.set(e, group.length > 1 ? (i / (group.length - 1) - 0.5) * 48 : 0));
+    laneCache.set(edges, lanes);
+  }
+  return lanes.get(edge) ?? 0;
 }
-function computeRoute(edge: Connector, nodes: Shape[]): Point[] {
+export function route(edge: Connector, nodes: Shape[], edges: Connector[] = noEdges): Point[] {
+  let scenes = routeCache.get(nodes);
+  if (!scenes) { scenes = new WeakMap(); routeCache.set(nodes, scenes); }
+  let cache = scenes.get(edges);
+  if (!cache) { cache = new Map(); scenes.set(edges, cache); }
+  const cached = cache.get(edge); if (cached) return cached;
+  const path = computeRoute(edge, nodes, laneOffset(edge, edges)); cache.set(edge, path); return path;
+}
+function computeRoute(edge: Connector, nodes: Shape[], offset: number): Point[] {
   const source = nodes.find(n => n.id === edge.source), target = nodes.find(n => n.id === edge.target);
   if (!source || !target) return [];
-  const a = anchor(source, target), b = anchor(target, source);
+  const a = anchor(source, target, offset), b = anchor(target, source, offset);
   // A rectilinear visibility grid keeps arrows clear of intervening shapes.
   const near = nodes.filter(n => n.x + n.width > Math.min(a.out.x, b.out.x) - 200 && n.x < Math.max(a.out.x, b.out.x) + 200 && n.y + n.height > Math.min(a.out.y, b.out.y) - 200 && n.y < Math.max(a.out.y, b.out.y) + 200);
   const xs = [...new Set([a.out.x, b.out.x, ...near.flatMap(n => [n.x - 20, n.x + n.width + 20])])].sort((a, b) => a - b);
@@ -82,7 +100,7 @@ export function edgeMiddle(path: Point[]) {
   return path[0] ?? { x: 0, y: 0 };
 }
 export function hitEdge(edges: Connector[], nodes: Shape[], p: Point, tolerance = 8) {
-  return [...edges].reverse().find(e => { const path = route(e, nodes); return path.slice(1).some((b, i) => { const a = path[i], dx = b.x - a.x, dy = b.y - a.y, t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy) < tolerance; }); });
+  return [...edges].reverse().find(e => { const path = route(e, nodes, edges); return path.slice(1).some((b, i) => { const a = path[i], dx = b.x - a.x, dy = b.y - a.y, t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy) < tolerance; }); });
 }
 export function parseBoard(input: unknown): Board {
   const b = input as Board;

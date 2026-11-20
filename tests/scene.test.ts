@@ -26,6 +26,37 @@ describe('scene graph', () => {
     const nodes = [shape('a', 0, 0), shape('b', 0, 300)], edge = { id: 'e', source: 'a', target: 'b', text: '' };
     expect(route(edge, nodes)[0]).toEqual({ x: 50, y: 80 }); expect(route({ ...edge, target: 'missing' }, nodes)).toEqual([]); expect(edgeMiddle([])).toEqual({ x: 0, y: 0 });
   });
+  it.each(['rectangle', 'diamond', 'ellipse'] as const)('separates retry arrows on %s outlines in both orientations', kind => {
+    for (const vertical of [false, true]) {
+      const nodes = [shape('a', 0, 0), { ...shape('b', vertical ? 0 : 400, vertical ? 300 : 0), kind }];
+      const edges = [{ id: 'next', source: 'a', target: 'b', text: 'Yes' }, { id: 'retry', source: 'b', target: 'a', text: 'No' }];
+      const paths = edges.map(e => route(e, nodes, edges));
+      expect(paths[0]).not.toEqual([...paths[1]].reverse());
+      paths.forEach((path, index) => {
+        expect(hitEdge(edges, nodes, edgeMiddle(path))?.id).toBe(edges[index].id);
+        for (let i = 1; i < path.length; i++) expect(path[i].x === path[i - 1].x || path[i].y === path[i - 1].y).toBe(true);
+        const point = index ? path[0] : path.at(-1)!, target = nodes[1];
+        const dx = Math.abs(point.x - target.x - target.width / 2) / (target.width / 2), dy = Math.abs(point.y - target.y - target.height / 2) / (target.height / 2);
+        expect(kind === 'diamond' ? dx + dy : kind === 'ellipse' ? dx * dx + dy * dy : Math.max(dx, dy)).toBeCloseTo(1);
+      });
+      const moved = nodes.map(n => n.id === 'b' ? { ...n, x: n.x + 80, y: n.y + 40 } : n);
+      edges.forEach(e => expect(hitEdge(edges, moved, edgeMiddle(route(e, moved, edges)))?.id).toBe(e.id));
+    }
+  });
+  it('updates cached routes when retry arrows are added, removed, or restored by undo', () => {
+    const nodes = [shape('a', 0, 0), shape('b', 400, 0)], edge = { id: 'next', source: 'a', target: 'b', text: '' };
+    const single = [edge], pair = [edge, { ...edge, id: 'retry', source: 'b', target: 'a' }];
+    const original = route(edge, nodes, single), separated = route(edge, nodes, pair);
+    expect(separated).not.toEqual(original);
+    expect(route(edge, nodes, [edge])).toEqual(original);
+    expect(route(edge, nodes, pair)).toEqual(separated);
+  });
+  it('keeps multiple parallel arrows distinct even on small shapes', () => {
+    const nodes = [shape('a', 0, 0), shape('b', 400, 0)].map(n => ({ ...n, height: 40 }));
+    const edges = Array.from({ length: 5 }, (_, i) => ({ id: String(i), source: 'a', target: 'b', text: '' }));
+    const positions = edges.map(e => edgeMiddle(route(e, nodes, edges)).y);
+    expect(new Set(positions).size).toBe(edges.length);
+  });
 });
 describe('portable boards', () => {
   const board = (): Board => ({ id: 'old', title: 'Test <board>', nodes: [shape('a', 0, 0), shape('b', 400, 0)], edges: [{ id: 'e', source: 'a', target: 'b', text: 'hello' }], updatedAt: 0 });

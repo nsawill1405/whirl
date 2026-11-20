@@ -227,7 +227,7 @@ export default function App() {
     else { const b = bounds(board.nodes), scale = Math.min(2, 8000 / Math.max(b.width + 120, b.height + 120)), c = document.createElement('canvas'); c.width = (b.width + 120) * scale; c.height = (b.height + 120) * scale; paint(c.getContext('2d')!, board, { zoom: scale, x: (-b.x + 60) * scale, y: (-b.y + 60) * scale }, c.width, c.height, [], false, false, images.current); c.toBlob(blob => { if (blob) download(blob, `${name}.png`); else notify('Could not export this image. Try SVG instead.'); }); }
   };
   const chosenNode = board?.nodes.find(n => n.id === selected[0]), chosenEdge = board?.edges.find(e => e.id === selected[0]);
-  const editNode = board?.nodes.find(n => n.id === editing?.id), editEdge = board?.edges.find(e => e.id === editing?.id), editPos = editNode ? { x: editNode.x, y: editNode.y, width: editNode.width, height: editNode.height } : editEdge && board ? { ...edgeMiddle(route(editEdge, board.nodes)), width: 160, height: 48 } : null;
+  const editNode = board?.nodes.find(n => n.id === editing?.id), editEdge = board?.edges.find(e => e.id === editing?.id), editPos = editNode ? { x: editNode.x, y: editNode.y, width: editNode.width, height: editNode.height } : editEdge && board ? { ...edgeMiddle(route(editEdge, board.nodes, board.edges)), width: 160, height: 48 } : null;
   return <div className={`app ${dark ? 'dark' : ''}`}>
     <header className="topbar">
       <button className="brand" onClick={() => setModal('boards')} title="Your boards"><img src="/icon.svg" alt=""/><span>whirl<span className="brand-dot">.</span></span></button>
