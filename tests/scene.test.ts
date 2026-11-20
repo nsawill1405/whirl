@@ -4,6 +4,10 @@ const shape = (id: string, x: number, y: number) => ({ ...makeShape('rectangle',
 describe('scene graph', () => {
   it('normalizes web URLs and rejects empty, malformed, and unsafe values', () => {
     expect(normalizeUrl(' example.com/x ')).toBe('https://example.com/x');
+    expect(normalizeUrl('example.com:8080/notes')).toBe('https://example.com:8080/notes');
+    expect(normalizeUrl('localhost:3000')).toBe('https://localhost:3000/');
+    expect(normalizeUrl('localhost:3000/notes')).toBe('https://localhost:3000/notes');
+    for (const value of ['javascript:8080/notes', 'mailto:user@example.com', 'example.com:99999/notes', 'localhost:abc']) expect(normalizeUrl(value)).toBeNull();
     expect(normalizeUrl('http://www.example.com/a?q=1')).toBe('http://www.example.com/a?q=1');
     for (const value of ['', '   ', 'not a url', 'hello', 'https://', 'javascript:alert(1)', 'data:text/html,hi', 'ftp://example.com']) expect(normalizeUrl(value)).toBeNull();
   });

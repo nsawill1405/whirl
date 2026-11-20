@@ -12,8 +12,9 @@ export function normalizeUrl(input: string): string | null {
   const value = input.trim();
   if (!value || /\s/.test(value)) return null;
   try {
-    const url = new URL(/^[a-z][a-z\d+.-]*:/i.test(value) ? value : `https://${value}`);
-    return ['http:', 'https:'].includes(url.protocol) && url.hostname && (/^https?:/i.test(value) || url.hostname.includes('.')) ? url.href : null;
+    const hostPort = /^(?:localhost|(?:[a-z\d-]+\.)+[a-z\d-]+):\d+(?:[/?#]|$)/i.test(value);
+    const url = new URL(!hostPort && /^[a-z][a-z\d+.-]*:/i.test(value) ? value : `https://${value}`);
+    return ['http:', 'https:'].includes(url.protocol) && url.hostname && (/^https?:/i.test(value) || hostPort || url.hostname.includes('.')) ? url.href : null;
   } catch { return null; }
 }
 export function makeShape(kind: Kind, x: number, y: number): Shape {
