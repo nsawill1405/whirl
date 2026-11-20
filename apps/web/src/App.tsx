@@ -3,7 +3,7 @@ import { ArrowDownToLine, ArrowRight, ArrowUpRight, Check, ChevronDown, Circle, 
 import { bounds, COLORS, MAX_IMAGE_BYTES, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, route, uid, type Board, type Connector, type Kind, type Point, type Scene, type Shape } from '@whirl/scene';
 import { download, paint, svg, type View } from './render';
 import { template } from './templates';
-import { loadBoards, saveBoards } from './storage';
+import { loadActiveBoard, loadBoards, saveActiveBoard, saveBoards } from './storage';
 
 type Tool = Kind | 'select' | 'hand' | 'connector';
 type Edit = { id: string; text: string };
@@ -40,6 +40,7 @@ export default function App() {
   const images = useRef(new Map<string, HTMLImageElement>()), saveQueue = useRef(Promise.resolve());
   const touches = useRef(new Map<number, Point>()), gesture = useRef<Gesture | null>(null), touchStart = useRef<TouchStart | null>(null);
   const [touchInput, setTouchInput] = useState(() => navigator.maxTouchPoints > 0);
+  const savedBoards = useRef<Board[]>([]);
   const notify = useCallback((message: string) => setToast(message), []);
   useEffect(() => { if (toast) { const t = setTimeout(() => setToast(''), 3800); return () => clearTimeout(t); } }, [toast]);
   useEffect(() => {
@@ -57,16 +58,17 @@ export default function App() {
   }, [modal]);
   useEffect(() => {
     let alive = true;
-    loadBoards().then(saved => { if (!alive) return; const list = saved?.length ? saved : [template('welcome')]; setBoards(list); setActive(list[0].id); setLoaded(true); }).catch(() => { if (!alive) return; const first = template('welcome'); setBoards([first]); setActive(first.id); setLoaded(true); setSaveState('Storage unavailable'); notify('Browser storage is unavailable. Export your work to keep it.'); });
+    loadBoards().then(saved => { if (!alive) return; const list = saved?.length ? saved : [template('welcome')]; savedBoards.current = saved ?? []; const activeId = loadActiveBoard(); setBoards(list); setActive(list.find(b => b.id === activeId)?.id ?? list[0].id); setLoaded(true); }).catch(() => { if (!alive) return; const first = template('welcome'); setBoards([first]); setActive(first.id); setLoaded(true); setSaveState('Storage unavailable'); notify('Browser storage is unavailable. Export your work to keep it.'); });
     return () => { alive = false; };
   }, [notify]);
   useEffect(() => {
     if (!loaded) return;
     setSaveState('Saving…');
     let current = true;
-    const timer = setTimeout(() => { saveQueue.current = saveQueue.current.catch(() => {}).then(() => saveBoards(boards)).then(() => { if (current) setSaveState('Saved on this device'); }).catch(() => { if (current) { setSaveState('Not saved — export a copy'); notify('Could not save. Export a JSON copy to keep your work.'); } }); }, 350);
+    const timer = setTimeout(() => { saveQueue.current = saveQueue.current.catch(() => {}).then(async () => { const recovered = await saveBoards(boards, savedBoards.current); savedBoards.current = boards; if (recovered) notify('Another tab changed this board. Both versions were kept. Reload to see all boards.'); }).then(() => { if (current) setSaveState('Saved on this device'); }).catch(() => { if (current) { setSaveState('Not saved — export a copy'); notify('Could not save. Export a JSON copy to keep your work.'); } }); }, 350);
     return () => { current = false; clearTimeout(timer); };
   }, [boards, loaded, notify]);
+  useEffect(() => { if (loaded && active) saveActiveBoard(active); }, [active, loaded]);
   useEffect(() => { const el = area.current; if (!el) return; const observer = new ResizeObserver(([entry]) => setSize({ width: entry.contentRect.width, height: entry.contentRect.height })); observer.observe(el); return () => observer.disconnect(); }, []);
   const fit = useCallback((readable = false) => {
     if (!latest.current) return;
