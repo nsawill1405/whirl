@@ -37,6 +37,7 @@ export default function App() {
   const [size, setSize] = useState({ width: 1200, height: 800 });
   const board = boards.find(b => b.id === active), latest = useRef(board); latest.current = board;
   const drag = useRef<Drag | null>(null), undoStack = useRef<Scene[]>([]), redoStack = useRef<Scene[]>([]), clipboard = useRef<Scene | null>(null);
+  const clipboardMarker = useRef(''), pendingPaste = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pasteCount = useRef(0), nudging = useRef(false);
   const images = useRef(new Map<string, HTMLImageElement>()), saveQueue = useRef(Promise.resolve());
   const touches = useRef(new Map<number, Point>()), gesture = useRef<Gesture | null>(null), touchStart = useRef<TouchStart | null>(null);
@@ -89,7 +90,7 @@ export default function App() {
   const undo = useCallback(() => { if (!latest.current) return; const scene = undoStack.current.pop(); if (!scene) return; redoStack.current.push(snapshot(latest.current)); updateScene(scene); setSelected([]); setEditing(null); renderHistory(v => v + 1); }, [updateScene]);
   const redo = useCallback(() => { if (!latest.current) return; const scene = redoStack.current.pop(); if (!scene) return; undoStack.current.push(snapshot(latest.current)); updateScene(scene); setSelected([]); renderHistory(v => v + 1); }, [updateScene]);
   const remove = useCallback(() => { const b = latest.current; if (!b || !selected.length) return; change({ nodes: b.nodes.filter(n => !selected.includes(n.id)), edges: b.edges.filter(e => !selected.includes(e.id) && !selected.includes(e.source) && !selected.includes(e.target)) }); setSelected([]); }, [change, selected]);
-  const copy = useCallback(() => { const b = latest.current; if (!b) return; const scene = selectionScene(b, selected); if (!scene.nodes.length) return; clipboard.current = scene; pasteCount.current = 0; notify('Copied. Paste anywhere on your board.'); }, [notify, selected]);
+  const copy = useCallback(() => { const b = latest.current; if (!b) return; const scene = selectionScene(b, selected); if (!scene.nodes.length) return; clipboard.current = scene; clipboardMarker.current = `whirl:${uid()}`; void navigator.clipboard?.writeText(clipboardMarker.current).catch(() => {}); pasteCount.current = 0; notify('Copied. Paste anywhere on your board.'); }, [notify, selected]);
   const paste = useCallback((duplicate?: Scene) => { const scene = duplicate ?? clipboard.current, b = latest.current; if (!b || !scene?.nodes.length) return; const { nodes, edges } = cloneScene(scene, 32 * (duplicate ? 1 : ++pasteCount.current)); change({ nodes: [...b.nodes, ...nodes], edges: [...b.edges, ...edges] }); setSelected(nodes.map(n => n.id)); canvas.current?.focus(); }, [change]);
   const addLink = useCallback((input: string, point?: Point) => {
     const url = normalizeUrl(input), b = latest.current;
@@ -103,11 +104,12 @@ export default function App() {
   useEffect(() => {
     const handler = (e: ClipboardEvent) => {
       if (editing || modal || linkInput !== null || (e.target as HTMLElement).closest('input,textarea,[contenteditable=true]')) return;
-      if (clipboard.current?.nodes.length) { e.preventDefault(); paste(); return; }
+      if (pendingPaste.current) { clearTimeout(pendingPaste.current); pendingPaste.current = null; }
       const value = e.clipboardData?.getData('text/plain') ?? '';
+      if (clipboard.current?.nodes.length && value === clipboardMarker.current) { e.preventDefault(); paste(); return; }
       if (normalizeUrl(value)) { e.preventDefault(); addLink(value); }
     };
-    window.addEventListener('paste', handler); return () => window.removeEventListener('paste', handler);
+    window.addEventListener('paste', handler); return () => { window.removeEventListener('paste', handler); if (pendingPaste.current) { clearTimeout(pendingPaste.current); pendingPaste.current = null; } };
   }, [addLink, paste, editing, modal, linkInput]);
   const group = useCallback((ungroup = false) => { const b = latest.current; if (!b) return; const ids = expandSelection(b.nodes, selected), members = b.nodes.filter(n => ids.includes(n.id)); if (ungroup ? !members.some(n => n.groupId) : members.length < 2 || members.every(n => n.groupId && n.groupId === members[0].groupId)) return; change({ ...snapshot(b), nodes: groupShapes(b.nodes, ids, ungroup) }); setSelected(ids); canvas.current?.focus(); }, [change, selected]);
   const chooseTool = (next: Tool) => { setTool(next); setEditing(null); setSource(null); setSelected([]); canvas.current?.focus(); };
@@ -120,9 +122,13 @@ export default function App() {
       const cmd = e.metaKey || e.ctrlKey, key = e.key.toLowerCase();
       if (e.altKey) return;
       if (cmd && ['z','y','c','v','d','a','s','g'].includes(key)) {
-        if (key === 'v' && !clipboard.current?.nodes.length) return;
+        if (key === 'v') {
+          if (pendingPaste.current) clearTimeout(pendingPaste.current);
+          if (clipboard.current?.nodes.length) pendingPaste.current = setTimeout(() => { pendingPaste.current = null; paste(); }, 100);
+          return;
+        }
         e.preventDefault();
-        if (key === 'z') e.shiftKey ? redo() : undo(); else if (key === 'y') redo(); else if (key === 'c') copy(); else if (key === 'v') paste(); else if (key === 'g') group(e.shiftKey); else if (key === 'a') setSelected(latest.current?.nodes.map(n => n.id) ?? []); else if (key === 'd') { const b = latest.current; if (b) paste(selectionScene(b, selected)); } else notify('Your boards save automatically on this device.');
+        if (key === 'z') e.shiftKey ? redo() : undo(); else if (key === 'y') redo(); else if (key === 'c') copy(); else if (key === 'g') group(e.shiftKey); else if (key === 'a') setSelected(latest.current?.nodes.map(n => n.id) ?? []); else if (key === 'd') { const b = latest.current; if (b) paste(selectionScene(b, selected)); } else notify('Your boards save automatically on this device.');
       } else if (cmd) return;
       else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(); }
       else if (e.key === 'Escape') { setSelected([]); setTool('select'); setSource(null); setExportOpen(false); }

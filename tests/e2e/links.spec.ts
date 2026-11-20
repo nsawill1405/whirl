@@ -1,5 +1,23 @@
 import { test, expect } from '@playwright/test';
 
+test('the latest external copy replaces the internal shape clipboard', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/'); await expect(page.getByLabel('Board title')).toHaveValue('A little room for big ideas');
+  await page.getByRole('button', { name: 'New board', exact: true }).click();
+  await page.getByRole('button', { name: 'Rectangle (R)', exact: true }).click();
+  await page.locator('canvas').focus(); await page.keyboard.press('Enter');
+  await page.keyboard.press('Control+c'); await page.keyboard.press('Control+v');
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /2 shapes/);
+  const external = await context.newPage(); await external.goto('/');
+  await external.evaluate(() => navigator.clipboard.writeText('https://example.com/newest'));
+  await page.bringToFront(); await page.locator('canvas').focus(); await page.keyboard.press('Control+v');
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /3 shapes/);
+  await expect(page.getByRole('button', { name: 'Open link', exact: true })).toBeVisible();
+  await external.bringToFront(); await external.evaluate(() => navigator.clipboard.writeText('not a URL'));
+  await page.bringToFront(); await page.locator('canvas').focus(); await page.keyboard.press('Control+v');
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /3 shapes/);
+});
+
 test('link cards add, paste, open, edit, undo, drop, and persist', async ({ page, context }) => {
   await page.goto('/');
   await expect(page.getByLabel('Board title')).toHaveValue('A little room for big ideas');
