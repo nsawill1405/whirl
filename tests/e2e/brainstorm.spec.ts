@@ -40,6 +40,21 @@ test('new stickies and text open for typing and preserve long multiline ideas', 
   await page.getByRole('button', { name: 'Toggle layers' }).click();
   await expect(page.getByRole('complementary').getByRole('button', { name: /Celebrate every fix/ })).toHaveCount(2);
 });
+for (const shortcut of ['s', 't']) {
+  test(`keyboard ${shortcut} then Enter captures an idea immediately`, async ({ page }) => {
+    await blank(page);
+    await page.locator('canvas').focus();
+    await page.keyboard.press(shortcut);
+    await page.keyboard.press('Enter');
+    const editor = page.getByRole('textbox', { name: 'Shape text' });
+    await expect(editor).toBeFocused();
+    await editor.fill('Capture a keyboard idea');
+    await editor.press('Enter');
+    await expect(editor).toHaveCount(0);
+    await expect(page.locator('canvas')).toBeFocused();
+    expect(JSON.parse(await exported(page, 'Whirl board')).nodes[0].text).toBe('Capture a keyboard idea');
+  });
+}
 test('Layers reveals offscreen ideas before editing', async ({ page }) => {
   await blank(page);
   await page.getByRole('button', { name: 'Sticky note (S)', exact: true }).click();
