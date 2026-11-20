@@ -26,6 +26,63 @@ describe('scene graph', () => {
     const nodes = [shape('a', 0, 0), shape('b', 0, 300)], edge = { id: 'e', source: 'a', target: 'b', text: '' };
     expect(route(edge, nodes)[0]).toEqual({ x: 50, y: 80 }); expect(route({ ...edge, target: 'missing' }, nodes)).toEqual([]); expect(edgeMiddle([])).toEqual({ x: 0, y: 0 });
   });
+  it.each(['rectangle', 'diamond', 'ellipse'] as const)('separates retry arrows on %s outlines in both orientations', kind => {
+    for (const vertical of [false, true]) {
+      const nodes = [shape('a', 0, 0), { ...shape('b', vertical ? 0 : 400, vertical ? 300 : 0), kind }];
+      const edges = [{ id: 'next', source: 'a', target: 'b', text: 'Yes' }, { id: 'retry', source: 'b', target: 'a', text: 'No' }];
+      const paths = edges.map(e => route(e, nodes, edges));
+      expect(paths[0]).not.toEqual([...paths[1]].reverse());
+      paths.forEach((path, index) => {
+        expect(hitEdge(edges, nodes, edgeMiddle(path))?.id).toBe(edges[index].id);
+        for (let i = 1; i < path.length; i++) expect(path[i].x === path[i - 1].x || path[i].y === path[i - 1].y).toBe(true);
+        const point = index ? path[0] : path.at(-1)!, target = nodes[1];
+        const dx = Math.abs(point.x - target.x - target.width / 2) / (target.width / 2), dy = Math.abs(point.y - target.y - target.height / 2) / (target.height / 2);
+        expect(kind === 'diamond' ? dx + dy : kind === 'ellipse' ? dx * dx + dy * dy : Math.max(dx, dy)).toBeCloseTo(1);
+      });
+      const moved = nodes.map(n => n.id === 'b' ? { ...n, x: n.x + 80, y: n.y + 40 } : n);
+      edges.forEach(e => expect(hitEdge(edges, moved, edgeMiddle(route(e, moved, edges)))?.id).toBe(e.id));
+    }
+  });
+  it('updates cached routes when retry arrows are added, removed, or restored by undo', () => {
+    const nodes = [shape('a', 0, 0), shape('b', 400, 0)], edge = { id: 'next', source: 'a', target: 'b', text: '' };
+    const single = [edge], pair = [edge, { ...edge, id: 'retry', source: 'b', target: 'a' }];
+    const original = route(edge, nodes, single), separated = route(edge, nodes, pair);
+    expect(separated).not.toEqual(original);
+    expect(route(edge, nodes, [edge])).toEqual(original);
+    expect(route(edge, nodes, pair)).toEqual(separated);
+  });
+  it('keeps multiple parallel arrows distinct even on small shapes', () => {
+    const nodes = [shape('a', 0, 0), shape('b', 400, 0)].map(n => ({ ...n, height: 40 }));
+    const edges = Array.from({ length: 5 }, (_, i) => ({ id: String(i), source: 'a', target: 'b', text: '' }));
+    const positions = edges.map(e => edgeMiddle(route(e, nodes, edges)).y);
+    expect(new Set(positions).size).toBe(edges.length);
+  });
+  it('keeps shifted exits and retry labels clear of a nearby shape', () => {
+    const obstacle = { ...shape('obstacle', 110, 0), width: 300, height: 120 };
+    const nodes = [shape('a', 0, 100), shape('b', 500, 100), obstacle];
+    const edges = [{ id: 'next', source: 'a', target: 'b', text: 'Next' }, { id: 'retry', source: 'b', target: 'a', text: 'Retry' }];
+    for (const edge of edges) {
+      const path = route(edge, nodes, edges);
+      expect(contains(obstacle, edgeMiddle(path))).toBe(false);
+      for (let i = 1; i < path.length; i++) {
+        const a = path[i - 1], b = path[i];
+        const horizontalCrosses = a.y === b.y && a.y > obstacle.y && a.y < obstacle.y + obstacle.height && Math.min(a.x, b.x) < obstacle.x + obstacle.width && Math.max(a.x, b.x) > obstacle.x;
+        const verticalCrosses = a.x === b.x && a.x > obstacle.x && a.x < obstacle.x + obstacle.width && Math.min(a.y, b.y) < obstacle.y + obstacle.height && Math.max(a.y, b.y) > obstacle.y;
+        expect(horizontalCrosses || verticalCrosses).toBe(false);
+      }
+    }
+  });
+  it('keeps retry routes independently selectable when both shifted exits are blocked', () => {
+    const nodes = [shape('a', 0, 100), shape('b', 500, 100),
+      { ...shape('above', 110, 0), width: 380, height: 120 },
+      { ...shape('below', 110, 160), width: 380, height: 120 }];
+    const edges = [{ id: 'next', source: 'a', target: 'b', text: 'Next' }, { id: 'retry', source: 'b', target: 'a', text: 'Retry' }];
+    for (const edge of edges) {
+      const p = edgeMiddle(route(edge, nodes, edges));
+      expect(hitNode(nodes, p)).toBeUndefined();
+      expect(hitEdge(edges, nodes, p)?.id).toBe(edge.id);
+    }
+  });
 });
 describe('portable boards', () => {
   const board = (): Board => ({ id: 'old', title: 'Test <board>', nodes: [shape('a', 0, 0), shape('b', 400, 0)], edges: [{ id: 'e', source: 'a', target: 'b', text: 'hello' }], updatedAt: 0 });

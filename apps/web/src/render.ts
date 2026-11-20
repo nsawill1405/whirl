@@ -19,7 +19,7 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
   }
   ctx.save(); ctx.translate(view.x, view.y); ctx.scale(view.zoom, view.zoom);
   for (const edge of scene.edges) {
-    const path = route(edge, scene.nodes); if (path.length < 2) continue;
+    const path = route(edge, scene.nodes, scene.edges); if (path.length < 2) continue;
     ctx.strokeStyle = selected.includes(edge.id) ? accent : ink; ctx.lineWidth = selected.includes(edge.id) ? 2.5 : 1.7;
     ctx.beginPath(); path.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
     const end = path.at(-1)!, before = path.at(-2)!, angle = Math.atan2(end.y - before.y, end.x - before.x);
@@ -66,6 +66,6 @@ function shapeSvg(n: Shape) {
 }
 export function svg(scene: Scene) {
   const b = bounds(scene.nodes), pad = 60;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${b.x - pad} ${b.y - pad} ${b.width + pad * 2} ${b.height + pad * 2}" width="${b.width + pad * 2}" height="${b.height + pad * 2}"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M1 1L7 4L1 7" fill="none" stroke="#9992b2"/></marker></defs><rect x="${b.x - pad}" y="${b.y - pad}" width="100%" height="100%" fill="#faf9f6"/>${scene.edges.map(e => { const path = route(e, scene.nodes), p = edgeMiddle(path); return `<polyline points="${path.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#9992b2" stroke-width="1.7" marker-end="url(#arrow)"/>${e.text ? `<text x="${p.x}" y="${p.y - 8}" text-anchor="middle" font-family="system-ui" font-size="12" fill="#706982">${escape(e.text)}</text>` : ''}`; }).join('')}${scene.nodes.map(shapeSvg).join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${b.x - pad} ${b.y - pad} ${b.width + pad * 2} ${b.height + pad * 2}" width="${b.width + pad * 2}" height="${b.height + pad * 2}"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M1 1L7 4L1 7" fill="none" stroke="#9992b2"/></marker></defs><rect x="${b.x - pad}" y="${b.y - pad}" width="100%" height="100%" fill="#faf9f6"/>${scene.edges.map(e => { const path = route(e, scene.nodes, scene.edges), p = edgeMiddle(path); return `<polyline points="${path.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#9992b2" stroke-width="1.7" marker-end="url(#arrow)"/>${e.text ? `<text x="${p.x}" y="${p.y - 8}" text-anchor="middle" font-family="system-ui" font-size="12" fill="#706982">${escape(e.text)}</text>` : ''}`; }).join('')}${scene.nodes.map(shapeSvg).join('')}</svg>`;
 }
 export function download(blob: Blob, name: string) { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
