@@ -69,6 +69,19 @@ test('a short label does not retain the default placeholder height', async ({ pa
   expect(label.height).toBeLessThan(100);
   expect(label.text).toBe('Hi');
 });
+test('Layers editing remains readable on narrow screens', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 780 });
+  await blank(page);
+  await page.getByRole('button', { name: 'Sticky note (S)', exact: true }).click();
+  await page.locator('canvas').click({ position: { x: 100, y: 260 } });
+  const editor = page.getByRole('textbox', { name: 'Shape text' });
+  await editor.fill('Read this idea'); await editor.press('Enter');
+  await page.getByRole('button', { name: 'Toggle layers' }).click();
+  await page.getByRole('complementary').getByRole('button', { name: 'Read this idea' }).dblclick();
+  await expect(editor).toBeInViewport({ ratio: 1 });
+  await expect(editor).toBeFocused();
+  expect(await editor.evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
+});
 test('zoom reset preserves the world point at the viewport center', async ({ page }) => {
   await blank(page);
   await page.getByRole('button', { name: 'Sticky note (S)', exact: true }).click();

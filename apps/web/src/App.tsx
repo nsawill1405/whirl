@@ -214,12 +214,14 @@ export default function App() {
     return committed;
   };
   const zoomBy = (factor: number) => setView(v => { const zoom = Math.min(3, Math.max(0.1, v.zoom * factor)); return { zoom, x: size.width / 2 - (size.width / 2 - v.x) * zoom / v.zoom, y: size.height / 2 - (size.height / 2 - v.y) * zoom / v.zoom }; });
-  const reveal = (n: Shape, editing = false) => {
+  const reveal = (n: Shape, forEditing = false) => {
     const panel = area.current?.querySelector<HTMLElement>('.layers-panel');
-    const left = editing ? 80 : (panel ? panel.offsetLeft + panel.offsetWidth + 24 : 80), right = size.width - 24, top = 100, bottom = size.height - 100;
+    const panelRight = panel ? panel.offsetLeft + panel.offsetWidth + 24 : 80;
+    const left = !forEditing && size.width - panelRight >= 240 ? panelRight : size.width <= 700 ? 24 : 80;
+    const right = size.width - 24, top = 100, bottom = size.height - 100;
     setView(v => {
-      if (n.x * v.zoom + v.x >= left && (n.x + n.width) * v.zoom + v.x <= right && n.y * v.zoom + v.y >= top && (n.y + n.height) * v.zoom + v.y <= bottom) return v;
-      const zoom = Math.max(0.1, Math.min(v.zoom, (right - left) / n.width, (bottom - top) / n.height));
+      if (!forEditing && n.x * v.zoom + v.x >= left && (n.x + n.width) * v.zoom + v.x <= right && n.y * v.zoom + v.y >= top && (n.y + n.height) * v.zoom + v.y <= bottom) return v;
+      const zoom = Math.max(0.1, Math.min(forEditing ? 1 : v.zoom, (right - left) / n.width, (bottom - top) / n.height));
       return { zoom, x: (left + right) / 2 - (n.x + n.width / 2) * zoom, y: (top + bottom) / 2 - (n.y + n.height / 2) * zoom };
     });
   };
