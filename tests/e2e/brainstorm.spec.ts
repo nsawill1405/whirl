@@ -5,7 +5,7 @@ async function blank(page: Page) {
   await page.goto('/');
   await expect(page.getByLabel('Board title')).toHaveValue('A little room for big ideas');
   await page.getByRole('button', { name: 'My boards' }).click();
-  await page.getByRole('button', { name: 'New board', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New board', exact: true }).click();
   await expect(page.getByLabel('Board title')).toHaveValue('Untitled board');
 }
 async function exported(page: Page, format: 'Whirl board' | 'SVG image') {
