@@ -1,4 +1,17 @@
-# Whirl
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f2027,50:203a43,100:2c5364&height=170&section=header&text=Whirl&fontSize=52&fontColor=ffffff&fontAlignY=36&desc=A%20local-first%20whiteboard.%20No%20account%2C%20no%20tracking.&descAlignY=58&descSize=16" alt="Whirl" width="100%" />
+
+<p>
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=white" alt="React" />
+  <a href="https://github.com/nsawill1405/whirl/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nsawill1405/whirl/ci.yml?branch=main&style=for-the-badge&label=CI&logo=githubactions&logoColor=white" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2c5364?style=for-the-badge" alt="License" /></a>
+</p>
+
+<p><a href="#what-works-today">What works today</a> · <a href="#run-locally">Run locally</a> · <a href="#your-data">Your data</a> · <a href="#controls">Controls</a> · <a href="#development">Development</a> · <a href="#license">License</a></p>
+
+</div>
 
 **A little space for your next big idea.** A free, MIT-licensed, local-first whiteboard for structured diagrams and sticky notes. No account, no tracking, no paid tier.
 
@@ -85,3 +98,13 @@ CI runs these checks on pull requests. Playwright covers drawing and connecting 
 ## License
 
 [MIT](LICENSE). Your boards are yours.
+
+---
+
+<div align="center">
+
+<sub>Made by <a href="https://github.com/nsawill1405">William North</a> · <a href="https://nsawill.co.uk">nsawill.co.uk</a></sub>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:2c5364,50:203a43,100:0f2027&height=100&section=footer" alt="" width="100%" />
+
+</div>
