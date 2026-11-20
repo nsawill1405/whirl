@@ -27,6 +27,8 @@ async function exported(page: Page): Promise<Board> {
   return JSON.parse(await readFile((await (await download).path())!, 'utf8'));
 }
 
+for (const modifier of ['Control', 'Meta']) {
+test.describe(`${modifier} shortcuts`, () => {
 test('Enter creates and edits shapes without a mouse, preserves multiline edits, and cancels safely', async ({ page }) => {
   await openFixture(page);
   await page.keyboard.press('r');
@@ -49,11 +51,11 @@ test('Enter creates and edits shapes without a mouse, preserves multiline edits,
   await page.keyboard.press('Enter');
   await expect(text).toHaveValue('Keyboard first\nSecond line');
   await text.press('Escape');
-  await page.keyboard.press('Control+z');
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press(`${modifier}+z`);
+  await page.keyboard.press(`${modifier}+z`);
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /3 shapes/);
-  await page.keyboard.press('Control+Shift+z');
-  await page.keyboard.press('Control+y');
+  await page.keyboard.press(`${modifier}+Shift+z`);
+  await page.keyboard.press(`${modifier}+y`);
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /4 shapes/);
   const board = await exported(page);
   expect(board.nodes.at(-1)?.text).toBe('Keyboard first\nSecond line');
@@ -64,12 +66,12 @@ test('duplicate does not replace a copied snapshot or reset successive paste off
   await page.keyboard.press('l');
   await expect(page.getByRole('button', { name: 'Original idea', exact: true })).toBeFocused();
   await page.keyboard.press('Space');
-  await page.keyboard.press('Control+c');
+  await page.keyboard.press(`${modifier}+c`);
   await page.keyboard.press('Tab');
   await page.keyboard.press('Space');
-  await page.keyboard.press('Control+d');
-  await page.keyboard.press('Control+v');
-  await page.keyboard.press('Control+v');
+  await page.keyboard.press(`${modifier}+d`);
+  await page.keyboard.press(`${modifier}+v`);
+  await page.keyboard.press(`${modifier}+v`);
   const board = await exported(page);
   expect(board.nodes).toHaveLength(6);
   expect(board.nodes[3]).toMatchObject({ kind: 'sticky', text: 'Other note', x: 482, y: 232 });
@@ -103,8 +105,8 @@ test('Layers supports keyboard subset selection, help retains it, and pasted con
   await page.keyboard.press('Shift+Enter');
   await expect(note).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('textbox', { name: 'Shape text' })).toHaveCount(0);
-  await page.keyboard.press('Control+c');
-  await page.keyboard.press('Control+v');
+  await page.keyboard.press(`${modifier}+c`);
+  await page.keyboard.press(`${modifier}+v`);
   const board = await exported(page);
   expect(board.nodes).toHaveLength(5);
   expect(board.edges).toHaveLength(2);
@@ -126,13 +128,37 @@ test('nudges move by one or ten units and held arrows undo as one edit', async (
   const moved = await exported(page);
   expect(moved.nodes[0]).toMatchObject({ x: 104, y: 210 });
   await page.locator('canvas').focus();
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press(`${modifier}+z`);
   const undone = await exported(page);
   expect(undone.nodes[0]).toMatchObject({ x: 101, y: 210 });
   await page.locator('canvas').focus();
-  await page.keyboard.press('Control+Shift+z');
+  await page.keyboard.press(`${modifier}+Shift+z`);
   const redone = await exported(page);
   expect(redone.nodes[0]).toMatchObject({ x: 104, y: 210 });
+});
+
+test('select all, empty-selection copy, delete/undo, autosave, and modified zoom work', async ({ page }) => {
+  await openFixture(page);
+  await page.keyboard.press(`${modifier}+a`);
+  await expect(page.getByText('3 selected', { exact: true })).toBeVisible();
+  await page.keyboard.press(`${modifier}+c`);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press(`${modifier}+c`);
+  await page.keyboard.press(`${modifier}+v`);
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /6 shapes/);
+  await page.keyboard.press('Backspace');
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /3 shapes/);
+  await page.keyboard.press(`${modifier}+z`);
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /6 shapes/);
+  await page.keyboard.press(`${modifier}+s`);
+  await expect(page.getByRole('status')).toContainText('boards save automatically');
+  const zoom = page.getByRole('button', { name: 'Reset zoom to 100 percent' });
+  const before = parseInt((await zoom.textContent())!);
+  await page.locator('canvas').dispatchEvent('wheel', { deltaY: -50, clientX: 600, clientY: 400, [modifier === 'Meta' ? 'metaKey' : 'ctrlKey']: true });
+  await expect.poll(async () => parseInt((await zoom.textContent())!)).toBeGreaterThan(before);
+  const board = await exported(page);
+  expect(board.nodes).toHaveLength(6);
+  expect(board.edges).toHaveLength(2);
 });
 
 test('native button Enter and text inputs do not trigger board-editing shortcuts', async ({ page }) => {
@@ -151,3 +177,6 @@ test('native button Enter and text inputs do not trigger board-editing shortcuts
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Select (V)', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
+
+});
+}
