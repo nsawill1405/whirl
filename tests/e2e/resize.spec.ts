@@ -40,6 +40,20 @@ test('a new text editor does not intercept its southeast handle at 40 percent zo
   await page.mouse.move(x + 60, y + 20, { steps: 5 }); await page.mouse.up();
   expect((await board(page)).nodes[0].width).toBeGreaterThan(300);
 });
+test('link cards resize without losing their URL and support undo', async ({ page }) => {
+  await page.goto('/'); await page.getByRole('button', { name: 'New board', exact: true }).click();
+  await page.getByRole('button', { name: 'Add link', exact: true }).click();
+  await page.getByLabel('Link URL').fill('https://example.com/notes'); await page.getByLabel('Link URL').press('Enter');
+  const canvas = (await page.locator('canvas').boundingBox())!, before = (await board(page)).nodes[0];
+  const x = canvas.x + canvas.width / 2 + before.width / 2 + 4, y = canvas.y + canvas.height / 2 + before.height / 2 + 4;
+  await page.mouse.move(x, y); await page.mouse.down();
+  await page.mouse.move(x + 60, y + 20, { steps: 5 }); await page.mouse.up();
+  const resized = (await board(page)).nodes[0];
+  expect(resized.width).toBe(before.width + 60); expect(resized.height).toBe(before.height + 20);
+  expect(resized.url).toBe(before.url);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  expect((await board(page)).nodes[0]).toEqual(before);
+});
 test('a growing narrow sticky editor stays inside the workspace near the bottom', async ({ page }) => {
   await page.goto('/');
   await page.locator('input[type=file]').setInputFiles({ name: 'narrow.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ title: 'Narrow sticky', nodes: [{ id: 'narrow', kind: 'sticky', x: 0, y: 0, width: 24, height: 80, text: 'Note', color: '#fff2cc' }], edges: [] })) });

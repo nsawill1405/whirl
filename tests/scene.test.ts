@@ -29,7 +29,7 @@ describe('scene graph', () => {
     for (const url of ['javascript:alert(1)', 'data:text/html,hi', 'example.com', '', 42]) expect(() => parseBoard({ ...board, nodes: [{ ...node, url }] })).toThrow();
     expect(() => parseBoard({ ...board, nodes: [{ ...node, kind: 'rectangle', url: 'javascript:alert(1)' }] })).toThrow();
   });
-  it.each(['rectangle', 'ellipse', 'diamond', 'sticky', 'text', 'image'] as const)('resizes %s from every corner, anchoring the opposite corner', kind => {
+  it.each(['rectangle', 'ellipse', 'diamond', 'sticky', 'text', 'image', 'link'] as const)('resizes %s from every corner, anchoring the opposite corner', kind => {
     const node = { ...shape('a', 100, 200), kind };
     for (const corner of ['nw', 'ne', 'sw', 'se']) {
       const west = corner.includes('w'), north = corner.includes('n');
