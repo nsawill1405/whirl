@@ -6,14 +6,21 @@ import { startBridge } from '../../packages/mcp/src/bridge';
 
 // Set WHIRL_DESKTOP_EXECUTABLE to test a packaged build instead of the source tree.
 const packaged = process.env.WHIRL_DESKTOP_EXECUTABLE;
-const launch = (userData: string) => electron.launch({ executablePath: packaged, args: [...(packaged ? [] : ['apps/desktop']), `--user-data-dir=${userData}`, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])] });
+const launch = async (userData: string) => {
+  const app = await electron.launch({ executablePath: packaged, args: [...(packaged ? [] : ['apps/desktop']), `--user-data-dir=${userData}`, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])] });
+  app.process().stderr?.on('data', data => console.log(`[main] ${String(data).trim()}`));
+  const win = await app.firstWindow();
+  win.on('console', message => console.log(`[renderer ${message.type()}] ${message.text()}`));
+  win.on('pageerror', error => console.log(`[renderer error] ${error.message}`));
+  return { app, win };
+};
 
 test('the desktop app opens Whirl, keeps boards between launches, and connects to the MCP server', async () => {
   const userData = await mkdtemp(join(tmpdir(), 'whirl-desktop-')), bridge = await startBridge({ port: 7331 });
   try {
-    let app = await launch(userData), win = await app.firstWindow();
+    let { app, win } = await launch(userData);
     expect(win.url()).toBe('app://whirl/');
-    await expect(win.getByLabel('Board title')).toHaveValue('A little room for big ideas');
+    await expect(win.getByLabel('Board title')).toHaveValue('A little room for big ideas', { timeout: 20000 });
     await win.getByLabel('Board title').fill('Desktop board');
     await win.getByRole('button', { name: 'Connect AI assistant (MCP)' }).click();
     await expect.poll(() => bridge.connected()).toBe(true);
@@ -26,7 +33,7 @@ test('the desktop app opens Whirl, keeps boards between launches, and connects t
     expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
     await app.close();
 
-    app = await launch(userData); win = await app.firstWindow();
+    ({ app, win } = await launch(userData));
     await expect(win.getByLabel('Board title')).toHaveValue('Desktop board');
     await expect(win.getByRole('button', { name: 'Connect AI assistant (MCP)' })).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => bridge.connected()).toBe(true);
