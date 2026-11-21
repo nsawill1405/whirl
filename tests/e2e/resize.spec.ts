@@ -109,8 +109,8 @@ for (const kind of ['Rectangle (R)', 'Sticky note (S)', 'Text (T)', 'image']) {
         await page.locator('canvas').click({ position: { x, y } });
       }
       // Keep the automatic sticky/text editor open for the very first resize.
-      const width = kind === 'image' ? 48 : kind.startsWith('Sticky') ? 176 : kind.startsWith('Text') ? 220 : 184;
-      const height = kind === 'image' ? 40 : kind.startsWith('Sticky') ? 152 : kind.startsWith('Text') ? 86 : 88;
+      const width = kind === 'image' ? 24 : kind.startsWith('Sticky') ? 176 : kind.startsWith('Text') ? 220 : 184;
+      const height = kind === 'image' ? 24 : kind.startsWith('Sticky') ? 152 : kind.startsWith('Text') ? 86 : 88;
       const start = { x: canvas.x + x + width * zoom + 4, y: canvas.y + y + height * zoom + 4 };
       await page.mouse.move(start.x, start.y); await page.mouse.down();
       await page.mouse.move(start.x + 50, start.y + 40, { steps: 5 }); await page.mouse.up();
