@@ -106,3 +106,13 @@ describe('MCP bridge', () => {
     await client.close();
   });
 });
+
+describe('MCP bridge robustness', () => {
+  it('ignores malformed replies from the tab', async () => {
+    const bridge = await startBridge({ port: 0 });
+    const tab = await new Promise<WebSocket>((resolve, reject) => { const ws = new WebSocket(`ws://127.0.0.1:${bridge.port}`, { headers: { Origin: 'http://localhost:5173' } }); ws.once('open', () => resolve(ws)); ws.once('error', reject); });
+    tab.on('message', raw => { const { id } = JSON.parse(String(raw)); for (const junk of ['null', '42', '"x"', '[]', '{']) tab.send(junk); tab.send(JSON.stringify({ id, result: 'ok' })); });
+    await expect(bridge.call('get_board')).resolves.toBe('ok');
+    tab.close(); await bridge.close();
+  });
+});

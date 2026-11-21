@@ -23,6 +23,7 @@ export function startBridge({ port = 7331, host = '127.0.0.1', origins = [] as s
       socket.on('message', raw => {
         let message: { id?: number; result?: unknown; error?: string };
         try { message = JSON.parse(String(raw)); } catch { return; }
+        if (!message || typeof message !== 'object') return;
         const p = typeof message.id === 'number' ? pending.get(message.id) : undefined;
         if (!p) return;
         clearTimeout(p.timer); pending.delete(message.id!);
