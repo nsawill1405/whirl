@@ -180,6 +180,7 @@ export default function App() {
   };
   const fitText = (n: Shape, previous?: Shape) => { const ctx = canvas.current?.getContext('2d'); return ctx ? growText(n, ctx, previous) : n; };
   mcpHandler.current = (method, params) => {
+    if (method !== 'list_boards' && method !== 'get_board') { const committed = editDone(); if (committed && latest.current) latest.current = { ...latest.current, ...committed }; }
     const b = latest.current, title = typeof params.title === 'string' ? params.title.trim().slice(0, 200) : '';
     if (method === 'list_boards') return { active: b?.id, boards: boards.map(x => ({ id: x.id, title: x.title, shapes: x.nodes.length, connectors: x.edges.length, updatedAt: new Date(x.updatedAt).toISOString() })) };
     if (method === 'open_board') { const next = boards.find(x => x.id === params.id); if (!next) throw new Error(`No board with id "${String(params.id)}".`); setActive(next.id); latest.current = next; return { id: next.id, title: next.title }; }

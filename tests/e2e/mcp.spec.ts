@@ -52,3 +52,22 @@ test('a newer tab takes over the MCP connection without the tabs fighting over i
     await expect(plug(other)).toHaveAttribute('aria-pressed', 'true');
   } finally { await bridge.close(); }
 });
+
+test('assistant edits keep the text the user is typing', async ({ page }) => {
+  const bridge = await startBridge({ port: 0 });
+  try {
+    await page.addInitScript(port => localStorage.setItem('whirl.mcp.port', String(port)), bridge.port);
+    await page.goto('/'); await page.getByRole('button', { name: 'New board', exact: true }).click();
+    await page.getByRole('button', { name: 'Connect AI assistant (MCP)' }).click();
+    await expect.poll(() => bridge.connected()).toBe(true);
+    await page.locator('canvas').focus(); await page.keyboard.press('s'); await page.keyboard.press('Enter');
+    await page.getByLabel('Shape text').fill('My draft');
+    await bridge.call('add_shapes', { shapes: [{ kind: 'rectangle', text: 'From AI' }] });
+    await expect(page.getByLabel('Shape text')).toHaveCount(0);
+    const board = await bridge.call('get_board') as { shapes: { id: string; text: string }[] };
+    expect(board.shapes.map(s => s.text)).toEqual(['My draft', 'From AI']);
+    await page.locator('canvas').focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Escape');
+    await bridge.call('update_shapes', { shapes: [{ id: board.shapes[0].id, text: 'Rewritten by AI' }] });
+    await expect.poll(async () => ((await bridge.call('get_board')) as typeof board).shapes[0].text).toBe('Rewritten by AI');
+  } finally { await bridge.close(); }
+});
