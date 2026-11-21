@@ -106,7 +106,7 @@ export default function App() {
       if (editing || modal || linkInput !== null || (e.target as HTMLElement).closest('input,textarea,[contenteditable=true]')) return;
       if (pendingPaste.current) { clearTimeout(pendingPaste.current); pendingPaste.current = null; }
       const value = e.clipboardData?.getData('text/plain') ?? '';
-      if (clipboard.current?.nodes.length && value === clipboardMarker.current) { e.preventDefault(); paste(); return; }
+      if (clipboard.current?.nodes.length && (!value || value === clipboardMarker.current || value.startsWith('whirl:'))) { e.preventDefault(); paste(); return; }
       if (normalizeUrl(value)) { e.preventDefault(); addLink(value); }
     };
     window.addEventListener('paste', handler); return () => { window.removeEventListener('paste', handler); if (pendingPaste.current) { clearTimeout(pendingPaste.current); pendingPaste.current = null; } };
@@ -124,7 +124,7 @@ export default function App() {
       if (cmd && ['z','y','c','v','d','a','s','g'].includes(key)) {
         if (key === 'v') {
           if (pendingPaste.current) clearTimeout(pendingPaste.current);
-          if (clipboard.current?.nodes.length) pendingPaste.current = setTimeout(() => { pendingPaste.current = null; paste(); }, 100);
+          if (clipboard.current?.nodes.length) pendingPaste.current = setTimeout(() => { pendingPaste.current = null; paste(); }, 0);
           return;
         }
         e.preventDefault();
