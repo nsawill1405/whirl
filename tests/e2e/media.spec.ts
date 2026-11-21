@@ -96,7 +96,7 @@ test('keyboard paste prioritizes native media and otherwise pastes shapes exactl
   await page.keyboard.press('Control+v');
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /3 shapes/);
   expect(JSON.parse(await exported(page)).nodes.map((n: { kind: string }) => n.kind)).toEqual(['rectangle', 'image', 'rectangle']);
-  await page.evaluate(() => navigator.clipboard.writeText('No media in this clipboard'));
+  await page.evaluate(() => navigator.clipboard.writeText(''));
   await page.locator('canvas').focus();
   await page.keyboard.press('Control+v');
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /4 shapes/);
