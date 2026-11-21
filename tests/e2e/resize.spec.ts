@@ -164,3 +164,23 @@ for (const kind of ['Sticky note (S)', 'Text (T)']) {
     expect(undone.width).toBe(360); expect(undone.text).toBe(text);
   });
 }
+test('handles and shapes show resize and move cursors, and dragging past the opposite edge flips the shape', async ({ page }) => {
+  await page.goto('/'); await page.getByRole('button', { name: 'New board', exact: true }).click();
+  const canvas = (await page.locator('canvas').boundingBox())!, cursor = () => page.locator('canvas').evaluate(el => getComputedStyle(el).cursor);
+  await page.getByRole('button', { name: 'Rectangle (R)', exact: true }).click();
+  await page.locator('canvas').click({ position: { x: 300, y: 220 } });
+  await page.mouse.move(canvas.x + 392, canvas.y + 264); await expect.poll(cursor).toBe('move');
+  await page.mouse.move(canvas.x + 488, canvas.y + 312); await expect.poll(cursor).toBe('nwse-resize');
+  await page.mouse.move(canvas.x + 488, canvas.y + 216); await expect.poll(cursor).toBe('nesw-resize');
+  await page.mouse.move(canvas.x + 700, canvas.y + 600); await expect.poll(cursor).toBe('auto');
+  const before = (await board(page)).nodes[0];
+  await page.mouse.move(canvas.x + 488, canvas.y + 312); await page.mouse.down();
+  await page.mouse.move(canvas.x + 188, canvas.y + 362, { steps: 6 });
+  await expect.poll(cursor).toBe('nesw-resize');
+  await page.mouse.up();
+  const flipped = (await board(page)).nodes[0];
+  expect(flipped).toMatchObject({ x: before.x - 116, y: before.y, width: 116, height: 138 });
+  await page.mouse.move(canvas.x + 180, canvas.y + 362); await expect.poll(cursor).toBe('nesw-resize');
+  await page.getByRole('button', { name: 'Ellipse (O)', exact: true }).click();
+  await expect.poll(cursor).toBe('crosshair');
+});

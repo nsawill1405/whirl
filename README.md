@@ -19,7 +19,7 @@
 
 - Infinite canvas with pan, zoom, fit-to-content, and light/dark themes.
 - Rectangles, ellipses, diamonds, sticky notes, text, and PNG/JPEG/WebP images, animated GIFs, and looping MP4/WebM/Ogg video (double-click or select and press Space to play/pause).
-- Select, shift-select, box-select, move, resize (bottom-right handle), recolor, duplicate, copy/paste, and undo/redo.
+- Select, shift-select, box-select, move, resize from any corner (drag past the opposite edge to flip), recolor, duplicate, copy/paste, and undo/redo.
 - Persistent groups: select shapes and group them to select, move, resize, copy, or export together.
 - Attached orthogonal connectors that route around shapes, with editable labels.
 - Multiple boards, IndexedDB autosave, and flowchart/retrospective templates.

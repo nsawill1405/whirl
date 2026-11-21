@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { normalizeUrl, bounds, cloneScene, contains, edgeMiddle, expandSelection, groupShapes, hitEdge, hitNode, makeShape, MAX_IMAGE_DATA_LENGTH, MAX_VIDEO_DATA_LENGTH, parseBoard, resizeSelection, route, selectionScene, uid, type Board } from '../packages/scene/src';
+import { normalizeUrl, bounds, cloneScene, contains, edgeMiddle, expandSelection, groupShapes, hitEdge, hitNode, makeShape, MAX_IMAGE_DATA_LENGTH, MAX_VIDEO_DATA_LENGTH, parseBoard, resizeCorner, resizeSelection, route, selectionScene, uid, type Board } from '../packages/scene/src';
 const shape = (id: string, x: number, y: number) => ({ ...makeShape('rectangle', x, y), id, width: 100, height: 80 });
 describe('scene graph', () => {
   it.each(['image/gif', 'video/mp4', 'video/webm', 'video/ogg'])('round trips %s media', mime => {
@@ -35,11 +35,24 @@ describe('scene graph', () => {
       const west = corner.includes('w'), north = corner.includes('n');
       const [resized] = resizeSelection([node], ['a'], west ? -30 : 30, north ? -20 : 20, corner);
       expect(resized).toMatchObject({ x: west ? 70 : 100, y: north ? 180 : 200, width: 130, height: 100 });
-      const [small] = resizeSelection([node], ['a'], west ? 1000 : -1000, north ? 1000 : -1000, corner);
+      const [small] = resizeSelection([node], ['a'], (west ? 1 : -1) * (node.width - 10), (north ? 1 : -1) * (node.height - 10), corner);
       expect(small.width).toBe(24); expect(small.height).toBe(24);
       expect(small.x + (west ? small.width : 0)).toBe(node.x + (west ? node.width : 0));
       expect(small.y + (north ? small.height : 0)).toBe(node.y + (north ? node.height : 0));
+      const [flipped] = resizeSelection([node], ['a'], (west ? 1 : -1) * (node.width + 50), (north ? 1 : -1) * (node.height + 30), corner);
+      expect(flipped).toMatchObject({ width: 50, height: 30, x: west ? node.x + node.width : node.x - 50, y: north ? node.y + node.height : node.y - 30 });
+      expect(resizeCorner([node], ['a'], (west ? 1 : -1) * (node.width + 50), (north ? 1 : -1) * (node.height + 30), corner)).toBe(`${north ? 's' : 'n'}${west ? 'e' : 'w'}`);
+      expect(resizeCorner([node], ['a'], west ? -30 : 30, north ? -20 : 20, corner)).toBe(corner);
     }
+  });
+  it('flips one axis at a time and mirrors grouped members across the anchored edge', () => {
+    const nodes = [shape('a', 0, 0), { ...shape('b', 200, 0), width: 100 }];
+    const [a, b] = resizeSelection(nodes, ['a', 'b'], -600, 0, 'se');
+    expect(a).toMatchObject({ x: -100, y: 0, width: 100, height: nodes[0].height });
+    expect(b).toMatchObject({ x: -300, y: 0, width: 100 });
+    expect(resizeCorner(nodes, ['a', 'b'], -600, 0, 'se')).toBe('sw');
+    const [tiny] = resizeSelection([nodes[0]], ['a'], -nodes[0].width - 5, 0, 'se');
+    expect(tiny).toMatchObject({ x: -24, width: 24 });
   });
   it('ignores empty or missing resize selections and keeps connectors attached', () => {
     const nodes = [shape('a', 0, 100), shape('b', 500, 100)];
@@ -176,7 +189,7 @@ describe('persistent groups', () => {
   });
   it('keeps fractional minimum-size rounding importable', () => {
     const original = groupShapes(nodes().map(n => ({ ...n, width: 188, height: 188 })), ['a', 'b']);
-    const resized = resizeSelection(original, ['a'], -10000, -10000);
+    const box = bounds(original.filter(n => n.groupId)), resized = resizeSelection(original, ['a'], 1 - box.width, 1 - box.height);
     expect(resized[0].width).toBe(24); expect(resized[0].height).toBe(24);
     expect(parseBoard(JSON.parse(JSON.stringify({ title: 'Tiny group', nodes: resized, edges: [] }))).nodes).toEqual(resized);
   });
