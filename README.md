@@ -19,19 +19,19 @@
 
 Draw, resize, and restyle shapes on an infinite canvas.
 
-docs/media/demo-draw.mp4
+![Drawing and resizing shapes](docs/media/demo-draw.gif)
 
 Write notes and sticky notes right on the shapes.
 
-docs/media/demo-notes.mp4
+![Writing notes and sticky notes](docs/media/demo-notes.gif)
 
 Connectors attach to shapes and route around them as you move things.
 
-docs/media/demo-connectors.mp4
+![Connectors routing around shapes](docs/media/demo-connectors.gif)
 
 Drop in links as cards and rearrange the board.
 
-docs/media/demo-links.mp4
+![Link cards](docs/media/demo-links.gif)
 
 ## What works today
 
