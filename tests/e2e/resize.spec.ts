@@ -41,6 +41,26 @@ for (const kind of ['Rectangle (R)', 'Sticky note (S)', 'Text (T)', 'image']) {
   }
 }
 for (const kind of ['Sticky note (S)', 'Text (T)']) {
+  test(`${kind} resizes from the painted handle after a draft grows taller`, async ({ page }) => {
+    await page.goto('/'); await page.getByRole('button', { name: 'New board', exact: true }).click();
+    const canvas = (await page.locator('canvas').boundingBox())!;
+    await page.getByRole('button', { name: kind, exact: true }).click();
+    await page.locator('canvas').click({ position: { x: 300, y: 180 } });
+    const width = kind.startsWith('Sticky') ? 176 : 220, height = kind.startsWith('Sticky') ? 152 : 86;
+    const text = Array.from({ length: 12 }, (_, i) => `Line ${i + 1}`).join('\n');
+    await page.getByRole('textbox', { name: 'Shape text' }).fill(text);
+    const editor = (await page.getByRole('textbox', { name: 'Shape text' }).boundingBox())!;
+    expect(editor.height).toBeGreaterThan(height + 100);
+    const x = canvas.x + 300 + width + 4, y = canvas.y + 180 + height + 4;
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x + 60, y + 20, { steps: 5 }); await page.mouse.up();
+    const resized = (await board(page)).nodes[0];
+    expect(resized.width).toBe(width + 60); expect(resized.text).toBe(text);
+    expect(resized.height).toBeGreaterThan(height + 100);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    const undone = (await board(page)).nodes[0];
+    expect(undone.width).toBe(width); expect(undone.text).toBe(text);
+  });
   test(`${kind} commits the draft and grows height when narrowing from a corner`, async ({ page }) => {
     await page.goto('/'); await page.getByRole('button', { name: 'New board', exact: true }).click();
     const canvas = (await page.locator('canvas').boundingBox())!;

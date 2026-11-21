@@ -192,7 +192,7 @@ export default function App() {
     if (!board || e.button > 1) return;
     const current = committed ?? snapshot(board);
     const screen = screenPoint(e), start = world(screen), n = hitNode(current.nodes, start);
-    const members = current.nodes.filter(n => selected.includes(n.id)), box = members.length ? bounds(members) : null;
+    const members = board.nodes.filter(n => selected.includes(n.id)), box = members.length ? bounds(members) : null;
     const handle = box && resizeHandles(box, view.zoom).find(p => Math.hypot(start.x - p.x, start.y - p.y) < 12 / view.zoom);
     if (editing && !handle) return;
     setExportOpen(false); e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId);
