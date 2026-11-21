@@ -8,6 +8,38 @@ async function board(page: Page): Promise<Board> {
   await page.getByRole('button', { name: /Whirl board Editable backup/ }).click();
   return JSON.parse(await readFile((await (await download).path())!, 'utf8'));
 }
+test('the nearest corner wins when handle hit areas overlap at minimum zoom', async ({ page }) => {
+  await page.goto('/'); await page.getByRole('button', { name: 'New board', exact: true }).click();
+  const canvas = (await page.locator('canvas').boundingBox())!;
+  await page.getByRole('button', { name: 'Rectangle (R)', exact: true }).click();
+  await page.locator('canvas').click({ position: { x: 300, y: 220 } });
+  await page.mouse.move(canvas.x + 488, canvas.y + 312); await page.mouse.down();
+  await page.mouse.move(canvas.x + 288, canvas.y + 212, { steps: 5 }); await page.mouse.up();
+  const small = (await board(page)).nodes[0];
+  expect(small.width).toBe(24); expect(small.height).toBe(24);
+  for (let i = 0; i < 13; i++) await page.getByRole('button', { name: 'Zoom out', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Reset zoom to 100 percent' })).toHaveText('10%');
+  const x = canvas.x + canvas.width / 2 + (300 - canvas.width / 2 + 24) * 0.1 + 4;
+  const y = canvas.y + canvas.height / 2 + (220 - canvas.height / 2 + 24) * 0.1 + 4;
+  await page.mouse.move(x, y); await page.mouse.down();
+  await page.mouse.move(x + 60, y + 20, { steps: 5 }); await page.mouse.up();
+  const resized = (await board(page)).nodes[0];
+  expect(resized.x).toBe(small.x); expect(resized.y).toBe(small.y);
+  expect(resized.width).toBeCloseTo(624); expect(resized.height).toBeCloseTo(224);
+});
+test('a new text editor does not intercept its southeast handle at 40 percent zoom', async ({ page }) => {
+  await page.goto('/'); await page.getByRole('button', { name: 'New board', exact: true }).click();
+  for (let i = 0; i < 5; i++) await page.getByRole('button', { name: 'Zoom out', exact: true }).click();
+  const zoom = (1 / 1.2) ** 5, canvas = (await page.locator('canvas').boundingBox())!;
+  await page.getByRole('button', { name: 'Text (T)', exact: true }).click();
+  await page.locator('canvas').click({ position: { x: 300, y: 220 } });
+  const editor = (await page.getByRole('textbox', { name: 'Shape text' }).boundingBox())!;
+  expect(editor.width).toBeCloseTo(220 * zoom, 0);
+  const x = canvas.x + 300 + 220 * zoom + 4, y = canvas.y + 220 + 86 * zoom + 4;
+  await page.mouse.move(x, y); await page.mouse.down();
+  await page.mouse.move(x + 60, y + 20, { steps: 5 }); await page.mouse.up();
+  expect((await board(page)).nodes[0].width).toBeGreaterThan(300);
+});
 for (const kind of ['Rectangle (R)', 'Sticky note (S)', 'Text (T)', 'image']) {
   for (const zoomed of [false, true]) {
     test(`${kind} resizes immediately and after selection at ${zoomed ? '83' : '100'} percent`, async ({ page }) => {
