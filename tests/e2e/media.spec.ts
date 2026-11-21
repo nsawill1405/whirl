@@ -103,3 +103,34 @@ test('invalid video imports report an error without creating a shape', async ({ 
   await expect(page.getByText('Could not decode this video.')).toBeVisible();
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', before!);
 });
+
+test('duplicated video shapes play independently and removed players are cleaned up', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'My boards' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New board', exact: true }).click();
+  await page.getByLabel('Import file').setInputFiles('tests/fixtures/animated.webm');
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Duplicate selection' }).click();
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /2 shapes/);
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Toggle layers' }).click();
+  const layers = page.getByRole('complementary').getByRole('button', { name: 'video', exact: true });
+  await layers.first().click();
+  await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await layers.last().click();
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete selection' }).click();
+  await expect(layers).toHaveCount(1);
+  await page.locator('canvas').focus(); await page.keyboard.press('Control+z');
+  await expect(layers).toHaveCount(2);
+  await layers.last().click();
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  await layers.first().click();
+  await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+});

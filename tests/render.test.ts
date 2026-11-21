@@ -9,17 +9,17 @@ describe('video playback', () => {
     const data = 'data:video/webm;base64,AAAA';
     videos.set(data, video as unknown as HTMLVideoElement);
     try {
-      await toggleVideo(data); expect(video.play).toHaveBeenCalledTimes(1); expect(video.muted).toBe(false);
+      await toggleVideo(data, data); expect(video.play).toHaveBeenCalledTimes(1); expect(video.muted).toBe(false);
       video.play.mockRejectedValueOnce(new Error('Autoplay blocked'));
-      await toggleVideo(data); expect(video.play).toHaveBeenCalledTimes(3); expect(video.muted).toBe(true);
-      video.paused = false; await toggleVideo(data); expect(video.pause).toHaveBeenCalledOnce();
+      await toggleVideo(data, data); expect(video.play).toHaveBeenCalledTimes(3); expect(video.muted).toBe(true);
+      video.paused = false; await toggleVideo(data, data); expect(video.pause).toHaveBeenCalledOnce();
     } finally { videos.delete(data); }
   });
   it('handles media that cannot play even when muted', async () => {
     const video = { paused: true, muted: false, play: vi.fn().mockRejectedValue(new Error('Unsupported codec')) };
     const data = 'data:video/webm;base64,broken';
     videos.set(data, video as unknown as HTMLVideoElement);
-    try { await expect(toggleVideo(data)).resolves.toBeUndefined(); expect(video.play).toHaveBeenCalledTimes(2); }
+    try { await expect(toggleVideo(data, data)).resolves.toBeUndefined(); expect(video.play).toHaveBeenCalledTimes(2); }
     finally { videos.delete(data); }
   });
 });

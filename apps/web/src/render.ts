@@ -31,9 +31,9 @@ export function retainGifs(data: Set<string>) {
   for (const [key, gif] of gifs) if (!data.has(key)) { gif.frame?.close(); gif.decoder?.close(); gifs.delete(key); }
 }
 export const videos = new Map<string, HTMLVideoElement>();
-export function getVideo(data: string) {
-  let video = videos.get(data);
-  if (!video) { video = document.createElement('video'); video.loop = true; video.playsInline = true; video.preload = 'auto'; video.src = data; videos.set(data, video); }
+export function getVideo(id: string, data: string) {
+  let video = videos.get(id);
+  if (!video) { video = document.createElement('video'); video.loop = true; video.playsInline = true; video.preload = 'auto'; video.src = data; videos.set(id, video); }
   return video;
 }
 export function readyVideo(video: HTMLVideoElement): Promise<void> {
@@ -47,13 +47,13 @@ export function readyVideo(video: HTMLVideoElement): Promise<void> {
     if (video.error) failed();
   });
 }
-export async function toggleVideo(data: string) {
-  const video = getVideo(data);
+export async function toggleVideo(id: string, data: string) {
+  const video = getVideo(id, data);
   if (!video.paused) { video.pause(); return; }
   try { await video.play(); } catch { video.muted = true; try { await video.play(); } catch { /* Unsupported media stays paused. */ } }
 }
-function videoFrame(data: string) {
-  const video = getVideo(data), canvas = document.createElement('canvas');
+function videoFrame(id: string, data: string) {
+  const video = getVideo(id, data), canvas = document.createElement('canvas');
   canvas.width = video.videoWidth || 1; canvas.height = video.videoHeight || 1;
   if (video.readyState >= 2) canvas.getContext('2d')!.drawImage(video, 0, 0);
   return canvas.toDataURL('image/png');
@@ -115,7 +115,7 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
       ctx.fillStyle = n.color; ctx.fill(); ctx.shadowColor = 'transparent';
       ctx.strokeStyle = n.kind === 'sticky' ? '#0000000d' : '#62587942'; ctx.lineWidth = 1.4; ctx.stroke();
       if (n.kind === 'video' && n.video) {
-        const video = getVideo(n.video);
+        const video = getVideo(n.id, n.video);
         if (video.readyState >= 2) { ctx.save(); ctx.clip(); ctx.drawImage(video, n.x, n.y, n.width, n.height); ctx.restore(); }
         if (video.paused) {
           const x = n.x + n.width / 2, y = n.y + n.height / 2;
@@ -150,7 +150,7 @@ function shapeSvg(n: Shape) {
   const size = textSize(n);
   const ctx = document.createElement('canvas').getContext('2d')!; ctx.font = textFont(n);
   const lines = visibleLines(n, s => ctx.measureText(s).width);
-  const image = n.video ? videoFrame(n.video) : n.image;
+  const image = n.video ? videoFrame(n.id, n.video) : n.image;
   return shape + (image ? `<image href="${escape(image)}" x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}" preserveAspectRatio="none"/>` : '') + lines.map((line, i) => `<text x="${n.x + n.width / 2}" y="${n.y + n.height / 2 + (i - (lines.length - 1) / 2) * size * 1.45}" text-anchor="middle" dominant-baseline="central" fill="#3e3655" font-family="system-ui,sans-serif" font-weight="${n.kind === 'text' ? 600 : 500}" font-size="${size}">${escape(line)}</text>`).join('');
 }
 export function svg(scene: Scene) {
