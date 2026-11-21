@@ -7,7 +7,7 @@ const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 
 export function allowedOrigin(origin: string | undefined, extra: string[] = []) {
   if (!origin) return false;
-  return extra.includes('*') || extra.includes(origin) || LOCAL_ORIGIN.test(origin);
+  return extra.includes('*') || extra.includes(origin) || origin === 'app://whirl' || LOCAL_ORIGIN.test(origin);
 }
 
 // The browser tab running Whirl connects here; MCP tool calls are relayed to it as JSON requests.

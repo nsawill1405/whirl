@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2c5364?style=for-the-badge" alt="License" /></a>
 </p>
 
-<p><a href="#what-works-today">What works today</a> · <a href="#run-locally">Run locally</a> · <a href="#your-data">Your data</a> · <a href="#controls">Controls</a> · <a href="#ai-assistants-mcp">AI assistants (MCP)</a> · <a href="#development">Development</a> · <a href="#license">License</a></p>
+<p><a href="#what-works-today">What works today</a> · <a href="#run-locally">Run locally</a> · <a href="#your-data">Your data</a> · <a href="#controls">Controls</a> · <a href="#ai-assistants-mcp">AI assistants (MCP)</a> · <a href="#desktop-app">Desktop app</a> · <a href="#development">Development</a> · <a href="#license">License</a></p>
 
 </div>
 
@@ -25,6 +25,7 @@
 - Multiple boards, IndexedDB autosave, and flowchart/retrospective templates.
 - PNG, SVG, and editable `.whirl.json` exports; import boards and images.
 - Responsive tools and keyboard-accessible layers for selecting objects.
+- A desktop app for Windows, macOS, and Linux.
 - An optional local MCP server so AI assistants (Claude, Cursor, and others) can read and edit the open board.
 
 **This is the first local-first release, not a multiplayer service.** Real-time collaboration, mind-map mode, PDF export, and accounts are not implemented. The next milestone is Yjs sync with a small Node/WebSocket server and durable server-side storage. The browser editor does not need a server API today; the MCP server is optional.
@@ -103,9 +104,22 @@ Tools: `list_boards`, `open_board`, `create_board`, `rename_board`, `get_board`,
 
 The server only binds to `127.0.0.1` and only accepts `localhost`/`127.0.0.1` pages. Set `WHIRL_MCP_ORIGINS=https://your-whirl-host` to allow a self-hosted copy (your browser may ask to allow access to local devices), and `WHIRL_MCP_PORT` to change the port. If you change the port, run `localStorage.setItem('whirl.mcp.port', '<port>')` in the Whirl tab's console. Only one tab can be connected at a time; the newest tab wins.
 
+## Desktop app
+
+`apps/desktop` wraps the editor in [Electron](https://www.electronjs.org). It works offline and saves boards in the app's own storage, separate from any browser. Installers are built by the **Desktop** GitHub Actions workflow: open a run and download `Whirl-windows` (`.exe`), `Whirl-macos` (`.dmg`), or `Whirl-linux` (`.AppImage` and `.deb`). The builds are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper warn the first time; on macOS, right-click the app and choose **Open**.
+
+```sh
+npm install
+npm run desktop        # build and launch from source
+npm run dist:desktop   # build an installer for this OS into apps/desktop/release
+npm run test:desktop   # Electron smoke test
+```
+
+The desktop app includes the MCP server. Choose **Help → Copy AI Assistant (MCP) Setup**, paste the copied JSON into your AI app's MCP config, restart the AI app, then click the plug icon in Whirl. The AppImage moves each time it runs, so use the `.deb` (or the source checkout) for MCP on Linux.
+
 ## Development
 
-`apps/web` is a React/Vite editor. `packages/scene` owns the portable scene model, geometry, validation, and connector routing. `packages/mcp` is the optional stdio MCP server and its WebSocket bridge to the editor. Rendering uses a high-DPI HTML canvas with viewport culling and cached routes; text editing uses an HTML overlay. There is no backend or secret configuration to set up.
+`apps/web` is a React/Vite editor. `packages/scene` owns the portable scene model, geometry, validation, and connector routing. `apps/desktop` is the Electron shell. `packages/mcp` is the optional stdio MCP server and its WebSocket bridge to the editor. Rendering uses a high-DPI HTML canvas with viewport culling and cached routes; text editing uses an HTML overlay. There is no backend or secret configuration to set up.
 
 ```sh
 npm run typecheck
