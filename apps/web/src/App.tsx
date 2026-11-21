@@ -228,7 +228,8 @@ export default function App() {
     else if (d.type === 'resize') {
       const nodes = resizeSelection(d.scene.nodes, d.ids, dx, dy, d.corner).map(n => {
         if (d.ids.length !== 1 || !d.ids.includes(n.id)) return n;
-        const fitted = fitText(n);
+        const original = d.scene.nodes.find(o => o.id === n.id);
+        const fitted = fitText(n, Math.abs(dy) < 3 ? original : undefined);
         return d.corner?.includes('n') ? { ...fitted, y: n.y + n.height - fitted.height } : fitted;
       });
       updateScene({ ...d.scene, nodes });
