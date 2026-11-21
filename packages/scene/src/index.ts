@@ -13,7 +13,8 @@ export const DOCUMENT_TYPES: Record<string, string> = { pdf: 'application/pdf', 
 export function validDocument(file: DocumentFile) {
   if (!file || typeof file.name !== 'string' || !file.name.length || file.name.length > 255 || typeof file.type !== 'string' || typeof file.data !== 'string' || !Number.isInteger(file.size) || file.size < 0 || file.size > MAX_DOCUMENT_BYTES) return false;
   const type = DOCUMENT_TYPES[file.name.split('.').pop()!.toLowerCase()];
-  return !!type && type === file.type && file.data.startsWith(`data:${type};base64,`) && file.data.length <= Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4 + 160 && /^[A-Za-z0-9+/]*={0,2}$/.test(file.data.slice(file.data.indexOf(',') + 1));
+  const body = file.data.slice(file.data.indexOf(',') + 1);
+  return !!type && type === file.type && file.data.startsWith(`data:${type};base64,`) && file.data.length <= Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4 + 160 && body.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(body);
 }
 export const MAX_IMAGE_DATA_LENGTH = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64;
 export function normalizeUrl(input: string): string | null {
