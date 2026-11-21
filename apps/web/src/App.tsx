@@ -7,7 +7,7 @@ import { loadActiveBoard, loadBoards, saveActiveBoard, saveBoards } from './stor
 
 type Tool = Kind | 'select' | 'hand' | 'connector';
 type Edit = { id: string; text: string };
-type Drag = { type: 'pan' | 'move' | 'resize' | 'marquee' | 'create'; start: Point; screen: Point; scene: Scene; ids: string[]; view: View; changed: boolean };
+type Drag = { type: 'pan' | 'move' | 'resize' | 'marquee' | 'create'; start: Point; screen: Point; scene: Scene; ids: string[]; view: View; changed: boolean; pendingShape?: Shape };
 type TouchStart = { scene: Scene; selected: string[]; source: string | null; tool: Tool; undo: Scene[]; redo: Scene[] };
 type Gesture = { center: Point; distance: number; view: View };
 const touchGeometry = (points: Map<number, Point>) => {
@@ -167,7 +167,7 @@ export default function App() {
     const base = { start, screen, scene: snapshot(board), ids: selected, view, changed: false };
     if (tool === 'hand' || e.button === 1 || e.altKey) { drag.current = { ...base, type: 'pan' }; return; }
     if (tool === 'connector') { if (!n) { setSource(null); return; } if (!source) setSource(n.id); else if (source !== n.id) { const edge: Connector = { id: uid(), source, target: n.id, text: '' }; change({ ...snapshot(board), edges: [...board.edges, edge] }); setSelected([edge.id]); setSource(null); setTool('select'); } return; }
-    if (tool !== 'select' && tool !== 'image') { const next = fitText(makeShape(tool as Kind, start.x, start.y)); setSelected([next.id]); updateScene({ ...snapshot(board), nodes: [...board.nodes, next] }); drag.current = { ...base, ids: [next.id], type: 'create', changed: true }; return; }
+    if (tool !== 'select' && tool !== 'image') { const next = fitText(makeShape(tool as Kind, start.x, start.y)); setSelected([next.id]); drag.current = { ...base, ids: [next.id], type: 'create', changed: true, pendingShape: next }; return; }
     const members = board.nodes.filter(n => selected.includes(n.id)), box = members.length ? bounds(members) : null;
     if (box && Math.hypot(start.x - box.x - box.width - 4, start.y - box.y - box.height - 4) < 12 / view.zoom) { drag.current = { ...base, type: 'resize' }; return; }
     if (n) { const unit = expandSelection(board.nodes, [n.id]), ids = e.shiftKey ? selected.includes(n.id) ? selected.filter(id => !unit.includes(id)) : [...new Set([...selected, ...unit])] : selected.includes(n.id) ? selected : unit; setSelected(ids); drag.current = { ...base, ids, type: 'move' }; }
@@ -194,7 +194,7 @@ export default function App() {
     if (d.type === 'pan') setView({ ...d.view, x: d.view.x + screen.x - d.screen.x, y: d.view.y + screen.y - d.screen.y });
     else if (d.type === 'move') updateScene({ ...d.scene, nodes: d.scene.nodes.map(n => d.ids.includes(n.id) ? { ...n, x: n.x + Math.round(dx / 8) * 8, y: n.y + Math.round(dy / 8) * 8 } : n) });
     else if (d.type === 'resize') updateScene({ ...d.scene, nodes: d.ids.length > 1 ? resizeSelection(d.scene.nodes, d.ids, dx, dy) : d.scene.nodes.map(n => d.ids.includes(n.id) ? fitText({ ...n, width: Math.max(48, Math.round((n.width + dx) / 8) * 8), height: Math.abs(dy) < 3 ? n.height : Math.max(40, Math.round((n.height + dy) / 8) * 8) }, Math.abs(dy) < 3 ? n : undefined) : n) });
-    else if (d.type === 'create' && latest.current) { const n = latest.current.nodes.find(n => n.id === d.ids[0]); if (!n) return; if (Math.abs(dx) > 6 || Math.abs(dy) > 6) updateScene({ ...d.scene, nodes: [...d.scene.nodes, fitText({ ...n, x: Math.min(d.start.x, d.start.x + dx), y: Math.min(d.start.y, d.start.y + dy), width: Math.max(48, Math.abs(dx)), height: Math.max(40, Math.abs(dy)) })] }); }
+    else if (d.type === 'create' && latest.current) { const n = latest.current.nodes.find(n => n.id === d.ids[0]) ?? d.pendingShape; if (!n) return; if (Math.abs(dx) > 6 || Math.abs(dy) > 6) updateScene({ ...d.scene, nodes: [...d.scene.nodes, fitText({ ...n, x: Math.min(d.start.x, d.start.x + dx), y: Math.min(d.start.y, d.start.y + dy), width: Math.max(48, Math.abs(dx)), height: Math.max(40, Math.abs(dy)) })] }); }
     else if (d.type === 'marquee') setMarquee({ a: d.start, b: p });
   };
   const onUp = (e: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -210,7 +210,7 @@ export default function App() {
     }
     const d = drag.current; if (!d) return;
     if (d.changed && ['move', 'resize', 'create'].includes(d.type)) remember(d.scene);
-    if (d.type === 'create') { setTool('select'); const n = latest.current?.nodes.find(n => n.id === d.ids[0]); if (n && (n.kind === 'sticky' || n.kind === 'text')) setEditing({ id: n.id, text: n.text }); }
+    if (d.type === 'create') { setTool('select'); const n = latest.current?.nodes.find(n => n.id === d.ids[0]) ?? d.pendingShape; if (n && !latest.current?.nodes.some(node => node.id === n.id)) updateScene({ ...d.scene, nodes: [...d.scene.nodes, n] }); if (n && (n.kind === 'sticky' || n.kind === 'text')) setEditing({ id: n.id, text: n.text }); }
     if (d.type === 'marquee' && marquee && latest.current) { const x = Math.min(marquee.a.x, marquee.b.x), y = Math.min(marquee.a.y, marquee.b.y), right = Math.max(marquee.a.x, marquee.b.x), bottom = Math.max(marquee.a.y, marquee.b.y); setSelected(expandSelection(latest.current.nodes, [...new Set([...d.ids, ...latest.current.nodes.filter(n => n.x >= x && n.y >= y && n.x + n.width <= right && n.y + n.height <= bottom).map(n => n.id)])])); }
     drag.current = null; setMarquee(null);
   };
