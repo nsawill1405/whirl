@@ -15,6 +15,24 @@
 
 **A little space for your next big idea.** A free, MIT-licensed, local-first whiteboard for structured diagrams and sticky notes. No account, no tracking, no paid tier.
 
+## See it in action
+
+Draw, resize, and restyle shapes on an infinite canvas.
+
+docs/media/demo-draw.mp4
+
+Write notes and sticky notes right on the shapes.
+
+docs/media/demo-notes.mp4
+
+Connectors attach to shapes and route around them as you move things.
+
+docs/media/demo-connectors.mp4
+
+Drop in links as cards and rearrange the board.
+
+docs/media/demo-links.mp4
+
 ## What works today
 
 - Infinite canvas with pan, zoom, fit-to-content, and light/dark themes.
