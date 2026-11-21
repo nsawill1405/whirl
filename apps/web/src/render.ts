@@ -65,6 +65,15 @@ export function gridSize(zoom: number) {
   const step = 24 * zoom;
   return { step: step * 2 ** Math.max(0, Math.ceil(Math.log2(12 / step))), radius: Math.max(0.8, 1.2 * zoom) };
 }
+export function resizeHandles(box: { x: number; y: number; width: number; height: number }, zoom: number) {
+  const pad = 4 / zoom;
+  return [
+    { corner: 'nw', x: box.x - pad, y: box.y - pad },
+    { corner: 'ne', x: box.x + box.width + pad, y: box.y - pad },
+    { corner: 'sw', x: box.x - pad, y: box.y + box.height + pad },
+    { corner: 'se', x: box.x + box.width + pad, y: box.y + box.height + pad },
+  ];
+}
 export function wrap(text: string, width: number, measure: (s: string) => number): string[] {
   return text.split('\n').flatMap(paragraph => {
     const lines: string[] = []; let line = '';
@@ -166,8 +175,9 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
   const members = scene.nodes.filter(n => selected.includes(n.id));
   if (members.length) {
       const n = bounds(members);
-      ctx.strokeStyle = accent; ctx.lineWidth = 1.5 / view.zoom; ctx.strokeRect(n.x - 4, n.y - 4, n.width + 8, n.height + 8);
-      for (const p of [{ x: n.x - 4, y: n.y - 4 }, { x: n.x + n.width + 4, y: n.y - 4 }, { x: n.x - 4, y: n.y + n.height + 4 }, { x: n.x + n.width + 4, y: n.y + n.height + 4 }]) { ctx.fillStyle = '#ffffff'; ctx.fillRect(p.x - 3 / view.zoom, p.y - 3 / view.zoom, 6 / view.zoom, 6 / view.zoom); ctx.strokeRect(p.x - 3 / view.zoom, p.y - 3 / view.zoom, 6 / view.zoom, 6 / view.zoom); }
+      const pad = 4 / view.zoom;
+      ctx.strokeStyle = accent; ctx.lineWidth = 1.5 / view.zoom; ctx.strokeRect(n.x - pad, n.y - pad, n.width + pad * 2, n.height + pad * 2);
+      for (const p of resizeHandles(n, view.zoom)) { ctx.fillStyle = '#ffffff'; ctx.fillRect(p.x - 3 / view.zoom, p.y - 3 / view.zoom, 6 / view.zoom, 6 / view.zoom); ctx.strokeRect(p.x - 3 / view.zoom, p.y - 3 / view.zoom, 6 / view.zoom, 6 / view.zoom); }
   }
   ctx.restore();
 }

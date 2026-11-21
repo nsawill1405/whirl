@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeShape } from '../packages/scene/src';
-import { getVideo, gridSize, growText, paint, textSize, toggleVideo, videos, wrap } from '../apps/web/src/render';
+import { getVideo, gridSize, growText, paint, resizeHandles, textSize, toggleVideo, videos, wrap } from '../apps/web/src/render';
 
 describe('canvas grid', () => {
   it('keeps dots visible and spacing readable across the full zoom range', () => {
@@ -70,6 +70,12 @@ describe('brainstorm text layout', () => {
       expect(text).toEqual(expected === '#302e3e' ? ['#eeeaf7', '#b4aec8'] : ['#3e3655', '#82798f']);
       expect(strokes.at(-1)).toBe(expected === '#302e3e' ? '#b9aaff' : '#7967e9');
     } finally { vi.unstubAllGlobals(); }
+  });
+  it.each([0.1, 0.5, 1, 3])('keeps resize handles four screen pixels outside the selection at zoom %s', zoom => {
+    const handles = resizeHandles({ x: 100, y: 200, width: 120, height: 80 }, zoom);
+    expect(handles.map(p => p.corner)).toEqual(['nw', 'ne', 'sw', 'se']);
+    expect((100 - handles[0].x) * zoom).toBeCloseTo(4);
+    expect((handles[3].y - 280) * zoom).toBeCloseTo(4);
   });
   it.each(['sticky', 'text'] as const)('grows %s to preserve every line without shrinking the font', kind => {
     const n = { ...makeShape(kind, 0, 0), text: 'One\nTwo\nThree\nFour\nFive\nSix\nSeven' };

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowDownToLine, ArrowRight, ArrowUpRight, Check, ChevronDown, Circle, Copy, Diamond, Download, FolderOpen, Hand, HelpCircle, ImagePlus, Link, Layers, Maximize, Minus, Moon, MousePointer2, MoveUpRight, Plus, Redo2, RotateCcw, Shapes, Sparkles, Square, StickyNote, Sun, Trash2, Type, Undo2, X, Github, LayoutTemplate, PanelLeftClose, Group, Ungroup } from 'lucide-react';
 import { normalizeUrl, bounds, cloneScene, COLORS, expandSelection, groupShapes, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_DOCUMENT_BYTES, DOCUMENT_TYPES, validDocument, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, resizeSelection, route, selectionScene, uid, type Board, type Connector, type Kind, type Point, type Scene, type Shape } from '@whirl/scene';
-import { readyVideo, retainGifs, getVideo, toggleVideo, videos, download, growText, paint, svg, textSize, type View } from './render';
+import { readyVideo, retainGifs, getVideo, toggleVideo, videos, download, growText, paint, resizeHandles, svg, textSize, type View } from './render';
 import { template } from './templates';
 import { loadActiveBoard, loadBoards, saveActiveBoard, saveBoards } from './storage';
 import { documentThumbnail } from './documents';
@@ -9,7 +9,7 @@ import { documentThumbnail } from './documents';
 const DocumentViewer = lazy(() => import('./DocumentViewer'));
 type Tool = Kind | 'select' | 'hand' | 'connector';
 type Edit = { id: string; text: string };
-type Drag = { type: 'pan' | 'move' | 'resize' | 'marquee' | 'create'; start: Point; screen: Point; scene: Scene; ids: string[]; view: View; changed: boolean; pendingShape?: Shape };
+type Drag = { type: 'pan' | 'move' | 'resize' | 'marquee' | 'create'; start: Point; screen: Point; scene: Scene; ids: string[]; view: View; changed: boolean; pendingShape?: Shape; corner?: string };
 type TouchStart = { scene: Scene; selected: string[]; source: string | null; tool: Tool; undo: Scene[]; redo: Scene[] };
 type Gesture = { center: Point; distance: number; view: View };
 const touchGeometry = (points: Map<number, Point>) => {
@@ -199,7 +199,8 @@ export default function App() {
     if (tool === 'connector') { if (!n) { setSource(null); return; } if (!source) setSource(n.id); else if (source !== n.id) { const edge: Connector = { id: uid(), source, target: n.id, text: '' }; change({ ...snapshot(board), edges: [...board.edges, edge] }); setSelected([edge.id]); setSource(null); setTool('select'); } return; }
     if (tool !== 'select' && tool !== 'image') { const next = fitText(makeShape(tool as Kind, start.x, start.y)); setSelected([next.id]); drag.current = { ...base, ids: [next.id], type: 'create', changed: true, pendingShape: next }; return; }
     const members = board.nodes.filter(n => selected.includes(n.id)), box = members.length ? bounds(members) : null;
-    if (box && Math.hypot(start.x - box.x - box.width - 4, start.y - box.y - box.height - 4) < 12 / view.zoom) { drag.current = { ...base, type: 'resize' }; return; }
+    const handle = box && resizeHandles(box, view.zoom).find(p => Math.hypot(start.x - p.x, start.y - p.y) < 12 / view.zoom);
+    if (handle) { drag.current = { ...base, type: 'resize', corner: handle.corner }; return; }
     if (n) { const unit = expandSelection(board.nodes, [n.id]), ids = e.shiftKey ? selected.includes(n.id) ? selected.filter(id => !unit.includes(id)) : [...new Set([...selected, ...unit])] : selected.includes(n.id) ? selected : unit; setSelected(ids); drag.current = { ...base, ids, type: 'move' }; }
     else { const edge = hitEdge(board.edges, board.nodes, start, 8 / view.zoom); if (edge) setSelected([edge.id]); else { if (!e.shiftKey) setSelected([]); drag.current = { ...base, ids: e.shiftKey ? selected : [], type: 'marquee' }; } }
   };
@@ -223,7 +224,7 @@ export default function App() {
     if (!d.changed) return;
     if (d.type === 'pan') setView({ ...d.view, x: d.view.x + screen.x - d.screen.x, y: d.view.y + screen.y - d.screen.y });
     else if (d.type === 'move') updateScene({ ...d.scene, nodes: d.scene.nodes.map(n => d.ids.includes(n.id) ? { ...n, x: n.x + Math.round(dx / 8) * 8, y: n.y + Math.round(dy / 8) * 8 } : n) });
-    else if (d.type === 'resize') updateScene({ ...d.scene, nodes: d.ids.length > 1 ? resizeSelection(d.scene.nodes, d.ids, dx, dy) : d.scene.nodes.map(n => d.ids.includes(n.id) ? fitText({ ...n, width: Math.max(48, Math.round((n.width + dx) / 8) * 8), height: Math.abs(dy) < 3 ? n.height : Math.max(40, Math.round((n.height + dy) / 8) * 8) }, Math.abs(dy) < 3 ? n : undefined) : n) });
+    else if (d.type === 'resize') updateScene({ ...d.scene, nodes: resizeSelection(d.scene.nodes, d.ids, dx, dy, d.corner) });
     else if (d.type === 'create' && latest.current) { const n = latest.current.nodes.find(n => n.id === d.ids[0]) ?? d.pendingShape; if (!n) return; if (Math.abs(dx) > 6 || Math.abs(dy) > 6) updateScene({ ...d.scene, nodes: [...d.scene.nodes, fitText({ ...n, x: Math.min(d.start.x, d.start.x + dx), y: Math.min(d.start.y, d.start.y + dy), width: Math.max(48, Math.abs(dx)), height: Math.max(40, Math.abs(dy)) })] }); }
     else if (d.type === 'marquee') setMarquee({ a: d.start, b: p });
   };
