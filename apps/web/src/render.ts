@@ -69,10 +69,11 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
       if (n.kind === 'image' && n.image) { const img = images.get(n.image); if (img?.complete && img.naturalWidth) { ctx.save(); ctx.clip(); ctx.drawImage(img, n.x, n.y, n.width, n.height); ctx.restore(); } }
     }
     if (n.kind === 'link') {
+      const darkCard = dark && n.color === COLORS[0];
       ctx.save(); ctx.clip(); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.save(); ctx.translate(n.x + 16, n.y + n.height / 2 - 10); ctx.strokeStyle = dark ? '#b9aaff' : '#7967e9'; ctx.lineWidth = 1.7; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(new Path2D(linkGlyph)); ctx.restore();
-      ctx.font = '600 14px system-ui'; ctx.fillStyle = dark ? '#eeeaf7' : '#3e3655'; ctx.fillText(ellipsis(n.text, n.width - 64, s => ctx.measureText(s).width), n.x + 48, n.y + n.height / 2 - 10);
-      ctx.font = '12px system-ui'; ctx.fillStyle = dark ? '#b4aec8' : '#82798f'; ctx.fillText(ellipsis(linkLabel(n), n.width - 64, s => ctx.measureText(s).width), n.x + 48, n.y + n.height / 2 + 13);
+      ctx.save(); ctx.translate(n.x + 16, n.y + n.height / 2 - 10); ctx.strokeStyle = darkCard ? '#b9aaff' : '#7967e9'; ctx.lineWidth = 1.7; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(new Path2D(linkGlyph)); ctx.restore();
+      ctx.font = '600 14px system-ui'; ctx.fillStyle = darkCard ? '#eeeaf7' : '#3e3655'; ctx.fillText(ellipsis(n.text, n.width - 64, s => ctx.measureText(s).width), n.x + 48, n.y + n.height / 2 - 10);
+      ctx.font = '12px system-ui'; ctx.fillStyle = darkCard ? '#b4aec8' : '#82798f'; ctx.fillText(ellipsis(linkLabel(n), n.width - 64, s => ctx.measureText(s).width), n.x + 48, n.y + n.height / 2 + 13);
       ctx.restore();
     } else if (n.text) {
       ctx.fillStyle = n.kind === 'text' && dark ? '#eeeaf7' : '#3e3655';

@@ -29,12 +29,14 @@ describe('canvas grid', () => {
 
 const ctx = { font: '', measureText: (s: string) => ({ width: s.length * 8 }) } as CanvasRenderingContext2D;
 describe('brainstorm text layout', () => {
-  it.each([[true, '#ffffff', '#302e3e'], [true, '#eee9ff', '#eee9ff'], [false, '#ffffff', '#ffffff']] as const)('paints link fills in dark=%s with color %s', (dark, color, expected) => {
-    const fills: string[] = [], context = new Proxy({ fillStyle: '', measureText: (text: string) => ({ width: text.length * 8 }), fill() { fills.push(this.fillStyle); } }, { get(target, key) { return key in target ? Reflect.get(target, key) : () => {}; } });
+  it.each([[true, '#ffffff', '#302e3e'], [true, '#eee9ff', '#eee9ff'], [true, '#fff2cc', '#fff2cc'], [false, '#ffffff', '#ffffff']] as const)('paints readable link colors in dark=%s with color %s', (dark, color, expected) => {
+    const fills: string[] = [], text: string[] = [], strokes: string[] = [], context = new Proxy({ fillStyle: '', strokeStyle: '', measureText: (text: string) => ({ width: text.length * 8 }), fill() { fills.push(this.fillStyle); }, fillText() { text.push(this.fillStyle); }, stroke() { strokes.push(this.strokeStyle); } }, { get(target, key) { return key in target ? Reflect.get(target, key) : () => {}; } });
     vi.stubGlobal('Path2D', class {});
     try {
       paint(context as unknown as CanvasRenderingContext2D, { nodes: [{ ...makeShape('link', 0, 0), color, text: 'Example', url: 'https://example.com' }], edges: [] }, { x: 0, y: 0, zoom: 1 }, 800, 600, [], dark, false);
       expect(fills).toEqual([expected]);
+      expect(text).toEqual(expected === '#302e3e' ? ['#eeeaf7', '#b4aec8'] : ['#3e3655', '#82798f']);
+      expect(strokes.at(-1)).toBe(expected === '#302e3e' ? '#b9aaff' : '#7967e9');
     } finally { vi.unstubAllGlobals(); }
   });
   it.each(['sticky', 'text'] as const)('grows %s to preserve every line without shrinking the font', kind => {
