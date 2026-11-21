@@ -9,29 +9,15 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2c5364?style=for-the-badge" alt="License" /></a>
 </p>
 
-<p><a href="#what-works-today">What works today</a> · <a href="#run-locally">Run locally</a> · <a href="#your-data">Your data</a> · <a href="#controls">Controls</a> · <a href="#ai-assistants-mcp">AI assistants (MCP)</a> · <a href="#desktop-app">Desktop app</a> · <a href="#development">Development</a> · <a href="#license">License</a></p>
+<p><a href="#what-works-today">What works today</a> · <a href="#write-anywhere">Write anywhere</a> · <a href="#connectors-that-stay-attached">Connectors</a> · <a href="#links-and-references-on-the-board">Links</a> · <a href="#run-locally">Run locally</a> · <a href="#your-data">Your data</a> · <a href="#controls">Controls</a> · <a href="#ai-assistants-mcp">AI assistants (MCP)</a> · <a href="#desktop-app">Desktop app</a> · <a href="#development">Development</a> · <a href="#license">License</a></p>
 
 </div>
 
 **A little space for your next big idea.** A free, MIT-licensed, local-first whiteboard for structured diagrams and sticky notes. No account, no tracking, no paid tier.
 
-## See it in action
-
-Draw, resize, and restyle shapes on an infinite canvas.
+Pick a tool, click or drag on the canvas, and a shape appears. Drag any corner to resize it — pull past the opposite edge and it flips. The floating toolbar restyles the selection: six palette colors, plus duplicate and delete. Everything works in light and dark themes.
 
 ![Drawing and resizing shapes](docs/media/demo-draw.gif)
-
-Write notes and sticky notes right on the shapes.
-
-![Writing notes and sticky notes](docs/media/demo-notes.gif)
-
-Connectors attach to shapes and route around them as you move things.
-
-![Connectors routing around shapes](docs/media/demo-connectors.gif)
-
-Drop in links as cards and rearrange the board.
-
-![Link cards](docs/media/demo-links.gif)
 
 ## What works today
 
@@ -47,6 +33,24 @@ Drop in links as cards and rearrange the board.
 - An optional local MCP server so AI assistants (Claude, Cursor, and others) can read and edit the open board.
 
 **This is the first local-first release, not a multiplayer service.** Real-time collaboration, mind-map mode, PDF export, and accounts are not implemented. The next milestone is Yjs sync with a small Node/WebSocket server and durable server-side storage. The browser editor does not need a server API today; the MCP server is optional.
+
+## Write anywhere
+
+Every shape doubles as a text container — double-click and start typing. Sticky notes come in the same palette as shapes, so a quick thought and a formal diagram node look right next to each other. Text, notes, and shapes can be selected, moved, grouped, and recolored together.
+
+![Writing notes and sticky notes](docs/media/demo-notes.gif)
+
+## Connectors that stay attached
+
+Press `C`, click a source shape, click a target — the connector binds to both. It reroutes orthogonally around shapes as you drag things around, and you can double-click it to add a label. Connectors copy, delete, and export along with the shapes they join.
+
+![Connectors routing around shapes](docs/media/demo-connectors.gif)
+
+## Links and references on the board
+
+Paste a URL and it lands as a link card with an "Open link" action in the toolbar — handy for keeping references beside the diagram they belong to. Images and videos embed the same way, so the board can hold the material you're thinking about, not just boxes and arrows.
+
+![Link cards](docs/media/demo-links.gif)
 
 ## Run locally
 
