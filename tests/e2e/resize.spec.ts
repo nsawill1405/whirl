@@ -40,6 +40,24 @@ test('a new text editor does not intercept its southeast handle at 40 percent zo
   await page.mouse.move(x + 60, y + 20, { steps: 5 }); await page.mouse.up();
   expect((await board(page)).nodes[0].width).toBeGreaterThan(300);
 });
+test('a growing narrow sticky editor stays inside the workspace near the bottom', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[type=file]').setInputFiles({ name: 'narrow.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ title: 'Narrow sticky', nodes: [{ id: 'narrow', kind: 'sticky', x: 0, y: 0, width: 24, height: 80, text: 'Note', color: '#fff2cc' }], edges: [] })) });
+  await expect(page.getByLabel('Board title')).toHaveValue('Narrow sticky');
+  const canvas = (await page.locator('canvas').boundingBox())!;
+  const x = canvas.x + canvas.width / 2, y = canvas.y + canvas.height - 140;
+  await page.mouse.move(x, canvas.y + canvas.height / 2); await page.mouse.down();
+  await page.mouse.move(x, y, { steps: 5 }); await page.mouse.up();
+  await page.mouse.dblclick(x, y);
+  const editor = page.getByRole('textbox', { name: 'Shape text' });
+  await editor.fill(Array.from({ length: 12 }, (_, i) => `Line ${i + 1}`).join('\n'));
+  const rect = (await editor.boundingBox())!;
+  expect(rect.x).toBeGreaterThanOrEqual(canvas.x); expect(rect.x + rect.width).toBeLessThanOrEqual(canvas.x + canvas.width);
+  expect(rect.y).toBeGreaterThanOrEqual(canvas.y); expect(rect.y + rect.height).toBeLessThanOrEqual(canvas.y + canvas.height);
+  expect(rect.width).toBeGreaterThanOrEqual(160); expect(rect.height).toBeGreaterThanOrEqual(64);
+  expect(rect.y + rect.height).toBeLessThan(y - 40 - 8);
+  await expect(editor).toBeFocused();
+});
 for (const dimensions of [{ width: 24, height: 100 }, { width: 184, height: 24 }]) {
   test(`tiny ${dimensions.width} by ${dimensions.height} shape has a readable editor without blocking handles`, async ({ page }) => {
     await page.goto('/');
