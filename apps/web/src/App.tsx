@@ -21,6 +21,7 @@ const toolList = [
   { id: 'sticky', icon: StickyNote, label: 'Sticky note', key: 'S' }, { id: 'text', icon: Type, label: 'Text', key: 'T' },
 ] as const;
 const shortcuts: Record<string, Tool> = { v: 'select', h: 'hand', r: 'rectangle', o: 'ellipse', d: 'diamond', c: 'connector', s: 'sticky', t: 'text' };
+const CLIPBOARD_MARKER = 'whirl:copied-shapes';
 const snapshot = (b: Scene): Scene => ({ nodes: b.nodes, edges: b.edges });
 
 export default function App() {
@@ -90,7 +91,7 @@ export default function App() {
   const undo = useCallback(() => { if (!latest.current) return; const scene = undoStack.current.pop(); if (!scene) return; redoStack.current.push(snapshot(latest.current)); updateScene(scene); setSelected([]); setEditing(null); renderHistory(v => v + 1); }, [updateScene]);
   const redo = useCallback(() => { if (!latest.current) return; const scene = redoStack.current.pop(); if (!scene) return; undoStack.current.push(snapshot(latest.current)); updateScene(scene); setSelected([]); renderHistory(v => v + 1); }, [updateScene]);
   const remove = useCallback(() => { const b = latest.current; if (!b || !selected.length) return; change({ nodes: b.nodes.filter(n => !selected.includes(n.id)), edges: b.edges.filter(e => !selected.includes(e.id) && !selected.includes(e.source) && !selected.includes(e.target)) }); setSelected([]); }, [change, selected]);
-  const copy = useCallback(() => { const b = latest.current; if (!b) return; const scene = selectionScene(b, selected); if (!scene.nodes.length) return; clipboard.current = scene; pasteCount.current = 0; notify('Copied. Paste anywhere on your board.'); }, [notify, selected]);
+  const copy = useCallback(() => { const b = latest.current; if (!b) return; const scene = selectionScene(b, selected); if (!scene.nodes.length) return; clipboard.current = scene; pasteCount.current = 0; notify('Copied. Paste anywhere on your board.'); return true; }, [notify, selected]);
   const paste = useCallback((duplicate?: Scene) => { const scene = duplicate ?? clipboard.current, b = latest.current; if (!b || !scene?.nodes.length) return; const { nodes, edges } = cloneScene(scene, 32 * (duplicate ? 1 : ++pasteCount.current)); change({ nodes: [...b.nodes, ...nodes], edges: [...b.edges, ...edges] }); setSelected(nodes.map(n => n.id)); canvas.current?.focus(); }, [change]);
   const group = useCallback((ungroup = false) => { const b = latest.current; if (!b) return; const ids = expandSelection(b.nodes, selected), members = b.nodes.filter(n => ids.includes(n.id)); if (ungroup ? !members.some(n => n.groupId) : members.length < 2 || members.every(n => n.groupId && n.groupId === members[0].groupId)) return; change({ ...snapshot(b), nodes: groupShapes(b.nodes, ids, ungroup) }); setSelected(ids); canvas.current?.focus(); }, [change, selected]);
   const chooseTool = (next: Tool) => { setTool(next); setEditing(null); setSource(null); setSelected([]); canvas.current?.focus(); };
@@ -102,9 +103,9 @@ export default function App() {
       if (modal) { if (e.key === 'Escape') setModal(null); return; }
       const cmd = e.metaKey || e.ctrlKey, key = e.key.toLowerCase();
       if (e.altKey) return;
-      if (cmd && ['z','y','c','d','a','s','g'].includes(key)) {
+      if (cmd && ['z','y','d','a','s','g'].includes(key)) {
         e.preventDefault();
-        if (key === 'z') e.shiftKey ? redo() : undo(); else if (key === 'y') redo(); else if (key === 'c') copy(); else if (key === 'g') group(e.shiftKey); else if (key === 'a') setSelected(latest.current?.nodes.map(n => n.id) ?? []); else if (key === 'd') { const b = latest.current; if (b) paste(selectionScene(b, selected)); } else notify('Your boards save automatically on this device.');
+        if (key === 'z') e.shiftKey ? redo() : undo(); else if (key === 'y') redo(); else if (key === 'g') group(e.shiftKey); else if (key === 'a') setSelected(latest.current?.nodes.map(n => n.id) ?? []); else if (key === 'd') { const b = latest.current; if (b) paste(selectionScene(b, selected)); } else notify('Your boards save automatically on this device.');
       } else if (cmd) return;
       else if (e.key === ' ' && selected.length === 1 && latest.current?.nodes.find(n => n.id === selected[0])?.video && !(e.target as HTMLElement).closest('button,a,select')) { e.preventDefault(); if (!e.repeat) toggle(latest.current.nodes.find(n => n.id === selected[0])!); }
       else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(); }
@@ -280,17 +281,22 @@ export default function App() {
   };
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
+    const copyShapes = (event: ClipboardEvent) => {
+      if (event.defaultPrevented || modal || !event.clipboardData || (event.target as HTMLElement).closest('input,textarea,[contenteditable=true]')) return;
+      if (copy()) { event.preventDefault(); event.clipboardData.setData('text/plain', CLIPBOARD_MARKER); }
+    };
     const pasteMedia = (event: ClipboardEvent) => {
       if (event.defaultPrevented || modal || (event.target as HTMLElement).closest('input,textarea,[contenteditable=true]')) return;
       const file = Array.from(event.clipboardData?.files ?? []).find(file => /^(image|video)\//.test(file.type));
       event.preventDefault();
-      if (file) void importFile(file); else paste();
+      if (event.clipboardData?.getData('text/plain') === CLIPBOARD_MARKER) paste();
+      else if (file) void importFile(file); else paste();
     };
     const dropMedia = (event: DragEvent) => { event.preventDefault(); void importFile(event.dataTransfer?.files[0]); };
     const allowDrop = (event: DragEvent) => event.preventDefault();
     const element = area.current;
-    window.addEventListener('paste', pasteMedia); element?.addEventListener('drop', dropMedia); element?.addEventListener('dragover', allowDrop);
-    return () => { window.removeEventListener('paste', pasteMedia); element?.removeEventListener('drop', dropMedia); element?.removeEventListener('dragover', allowDrop); };
+    window.addEventListener('copy', copyShapes); window.addEventListener('paste', pasteMedia); element?.addEventListener('drop', dropMedia); element?.addEventListener('dragover', allowDrop);
+    return () => { window.removeEventListener('copy', copyShapes); window.removeEventListener('paste', pasteMedia); element?.removeEventListener('drop', dropMedia); element?.removeEventListener('dragover', allowDrop); };
   });
   const exportBoard = async (format: 'svg' | 'png' | 'json', onlySelection = false) => {
     if (!board) return;

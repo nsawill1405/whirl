@@ -88,11 +88,19 @@ test('keyboard paste prioritizes native media and otherwise pastes shapes exactl
   await page.keyboard.press('Control+v');
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /2 shapes/);
   expect(JSON.parse(await exported(page)).nodes.map((n: { kind: string }) => n.kind)).toEqual(['rectangle', 'image']);
-  await page.evaluate(() => navigator.clipboard.writeText('No media in this clipboard'));
+  await page.getByRole('button', { name: 'Toggle layers' }).click();
+  await page.getByRole('complementary').getByRole('button', { name: 'rectangle', exact: true }).click();
   await page.locator('canvas').focus();
+  await page.keyboard.press('Control+c');
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('whirl:copied-shapes');
   await page.keyboard.press('Control+v');
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /3 shapes/);
   expect(JSON.parse(await exported(page)).nodes.map((n: { kind: string }) => n.kind)).toEqual(['rectangle', 'image', 'rectangle']);
+  await page.evaluate(() => navigator.clipboard.writeText('No media in this clipboard'));
+  await page.locator('canvas').focus();
+  await page.keyboard.press('Control+v');
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /4 shapes/);
+  expect(JSON.parse(await exported(page)).nodes.map((n: { kind: string }) => n.kind)).toEqual(['rectangle', 'image', 'rectangle', 'rectangle']);
 });
 
 test('invalid video imports report an error without creating a shape', async ({ page }) => {
