@@ -142,3 +142,22 @@ test('duplicated video shapes play independently and removed players are cleaned
   await layers.first().click();
   await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
 });
+
+test('imported boards can reuse a video shape id with different media', async ({ page }) => {
+  await page.goto('/');
+  for (const name of ['animated', 'alternate']) {
+    const data = `data:video/webm;base64,${(await readFile(`tests/fixtures/${name}.webm`)).toString('base64')}`;
+    const board = { title: name, nodes: [{ id: 'reused-video', kind: 'video', video: data, x: 0, y: 0, width: 160, height: 100, text: '', color: '#ffffff' }], edges: [] };
+    await page.getByLabel('Import file').setInputFiles({ name: `${name}.json`, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(board)) });
+    await expect(page.getByLabel('Board title')).toHaveValue(name);
+    const svg = await exported(page, 'SVG image');
+    const pixel = await page.evaluate(async svg => {
+      const image = new Image(); image.src = new DOMParser().parseFromString(svg, 'image/svg+xml').querySelector('image')!.getAttribute('href')!;
+      await image.decode(); const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+      const ctx = canvas.getContext('2d')!; ctx.drawImage(image, 0, 0);
+      return [...ctx.getImageData(image.width / 2, image.height / 2, 1, 1).data];
+    }, svg);
+    if (name === 'alternate') { expect(pixel[0]).toBeLessThan(10); expect(pixel[1]).toBeLessThan(10); expect(pixel[2]).toBeGreaterThan(240); }
+    else expect(pixel.slice(0, 3)).not.toEqual([0, 0, 255]);
+  }
+});

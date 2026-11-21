@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeShape } from '../packages/scene/src';
-import { growText, textSize, toggleVideo, videos, wrap } from '../apps/web/src/render';
+import { getVideo, growText, textSize, toggleVideo, videos, wrap } from '../apps/web/src/render';
 
 const ctx = { font: '', measureText: (s: string) => ({ width: s.length * 8 }) } as CanvasRenderingContext2D;
 describe('video playback', () => {
   it('plays with sound, retries muted on rejection, and pauses', async () => {
-    const video = { paused: true, muted: false, play: vi.fn().mockResolvedValue(undefined), pause: vi.fn() };
+    const video = { src: 'data:video/webm;base64,AAAA', paused: true, muted: false, play: vi.fn().mockResolvedValue(undefined), pause: vi.fn() };
     const data = 'data:video/webm;base64,AAAA';
     videos.set(data, video as unknown as HTMLVideoElement);
     try {
@@ -16,11 +16,23 @@ describe('video playback', () => {
     } finally { videos.delete(data); }
   });
   it('handles media that cannot play even when muted', async () => {
-    const video = { paused: true, muted: false, play: vi.fn().mockRejectedValue(new Error('Unsupported codec')) };
+    const video = { src: 'data:video/webm;base64,broken', paused: true, muted: false, play: vi.fn().mockRejectedValue(new Error('Unsupported codec')) };
     const data = 'data:video/webm;base64,broken';
     videos.set(data, video as unknown as HTMLVideoElement);
     try { await expect(toggleVideo(data, data)).resolves.toBeUndefined(); expect(video.play).toHaveBeenCalledTimes(2); }
     finally { videos.delete(data); }
+  });
+  it('replaces a player when its shape id is reused for different media', () => {
+    const previous = { src: 'data:video/webm;base64,AAAA', pause: vi.fn(), removeAttribute: vi.fn(), load: vi.fn() }, replacement = { src: '' };
+    videos.set('reused-id', previous as unknown as HTMLVideoElement);
+    vi.stubGlobal('document', { createElement: vi.fn(() => replacement) });
+    try {
+      expect(getVideo('reused-id', previous.src)).toBe(previous);
+      expect(getVideo('reused-id', 'data:video/webm;base64,BBBB')).toBe(replacement);
+      expect(previous.pause).toHaveBeenCalledOnce(); expect(previous.removeAttribute).toHaveBeenCalledWith('src'); expect(previous.load).toHaveBeenCalledOnce();
+      expect(replacement.src).toBe('data:video/webm;base64,BBBB');
+      expect(getVideo('reused-id', replacement.src)).toBe(replacement);
+    } finally { videos.delete('reused-id'); vi.unstubAllGlobals(); }
   });
 });
 describe('brainstorm text layout', () => {

@@ -33,6 +33,7 @@ export function retainGifs(data: Set<string>) {
 export const videos = new Map<string, HTMLVideoElement>();
 export function getVideo(id: string, data: string) {
   let video = videos.get(id);
+  if (video && video.src !== data) { video.pause(); video.removeAttribute('src'); video.load(); videos.delete(id); video = undefined; }
   if (!video) { video = document.createElement('video'); video.loop = true; video.playsInline = true; video.preload = 'auto'; video.src = data; videos.set(id, video); }
   return video;
 }
