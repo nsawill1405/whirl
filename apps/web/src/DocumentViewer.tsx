@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { DocumentFile } from '@whirl/scene';
 import { documentBytes, documentPdf, documentText } from './documents';
 const documentFrame = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data: blob:"><style>body{margin:0} .docx-wrapper{padding:16px!important} .docx{max-width:100%;box-sizing:border-box}</style></head><body></body></html>`;
-export default function DocumentViewer({ file }: { file: DocumentFile }) {
+export default function DocumentViewer({ file, onClose }: { file: DocumentFile; onClose: () => void }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const host = useRef<HTMLDivElement>(null), [url, setUrl] = useState(''), [pages, setPages] = useState<string[]>([]), [error, setError] = useState(''), [ready, setReady] = useState(false);
   useEffect(() => {
@@ -15,11 +15,13 @@ export default function DocumentViewer({ file }: { file: DocumentFile }) {
       } else if (file.name.toLowerCase().endsWith('.docx')) {
         const { renderAsync } = await import('docx-preview'), iframe = frame.current; if (!alive || !iframe) return;
         if (iframe.contentDocument?.URL !== 'about:srcdoc' || iframe.contentDocument.readyState !== 'complete') await new Promise<void>(resolve => iframe.addEventListener('load', () => resolve(), { once: true }));
-        const doc = iframe.contentDocument; if (!alive || !doc) return; doc.addEventListener('click', e => { if ((e.target as Element).closest('a')) e.preventDefault(); }); await renderAsync(blob, doc.body, undefined, { renderAltChunks: false, useBase64URL: true });
+        const doc = iframe.contentDocument; if (!alive || !doc) return;
+        const keydown = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } }; doc.addEventListener('keydown', keydown); dispose = () => doc.removeEventListener('keydown', keydown);
+        doc.addEventListener('click', e => { if ((e.target as Element).closest('a')) e.preventDefault(); }); await renderAsync(blob, doc.body, undefined, { renderAltChunks: false, useBase64URL: true });
       }
       else { const text = await documentText(file); if (alive) setPages(text); }
     } catch { if (alive) setError('Could not preview this document. Download it to open locally.'); } finally { if (alive) setReady(true); } })();
     return () => { alive = false; dispose(); if (href) URL.revokeObjectURL(href); };
-  }, [file]);
+  }, [file, onClose]);
   return <><h1>{file.name}</h1><a className="button primary" href={url} download={file.name}>Download</a><div className="document-preview"><div ref={host}/>{file.name.toLowerCase().endsWith('.docx') && <iframe ref={frame} title="Word document preview" sandbox="allow-same-origin" srcDoc={documentFrame} style={{ width: '100%', height: '60vh', border: 0 }}/ >}{pages.map((text, i) => <section className="document-page" key={i}>{pages.length > 1 && <h2>Slide {i + 1}</h2>}<pre>{text}</pre></section>)}{error ? <p role="alert">{error}</p> : ready && !pages.length && !file.name.toLowerCase().endsWith('.docx') && file.type !== 'application/pdf' ? <p>Preview not available. Download this file to open it locally.</p> : !ready && <p>Loading preview…</p>}</div></>;
 }
