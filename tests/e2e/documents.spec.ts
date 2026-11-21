@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
 import JSZip from 'jszip';
+test('opening a grouped document keeps its whole group selected for deletion', async ({ page }) => {
+  const fixture = { title: 'Grouped documents', nodes: [{ id: 'doc', kind: 'document', x: 0, y: 0, width: 240, height: 330, color: '#ffffff', text: '', groupId: 'together', file: { name: 'Grouped.txt', type: 'text/plain', size: 5, data: 'data:text/plain;base64,aGVsbG8=' } }, { id: 'rect', kind: 'rectangle', x: 400, y: 100, width: 184, height: 88, text: 'Group mate', color: '#ffffff', groupId: 'together' }], edges: [] };
+  await page.goto('/'); await expect(page.getByLabel('Board title')).toHaveValue('A little room for big ideas'); await page.getByLabel('Import file', { exact: true }).setInputFiles({ name: 'grouped.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixture)) }); await expect(page.getByLabel('Board title')).toHaveValue(fixture.title); await page.getByRole('button', { name: 'Fit board', exact: true }).click(); const canvas = page.locator('canvas'), box = (await canvas.boundingBox())!; await canvas.dblclick({ position: { x: box.width / 2 - 172, y: box.height / 2 } }); await expect(page.getByRole('dialog')).toContainText('hello'); await page.getByLabel('Close dialog').click(); await expect(page.getByText('Group · 2 shapes', { exact: true })).toBeVisible(); await canvas.focus(); await page.keyboard.press('ArrowRight'); await page.keyboard.press('Delete'); await expect(canvas).toHaveAttribute('aria-label', /0 shapes/);
+});
 test('PowerPoint follows the declared slide order and falls back when metadata is absent', async ({ page }) => {
   await page.goto('/'); await page.getByRole('button', { name: 'New board', exact: true }).click();
   for (const declared of [true, false]) {
