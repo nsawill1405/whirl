@@ -40,6 +40,28 @@ test('a new text editor does not intercept its southeast handle at 40 percent zo
   await page.mouse.move(x + 60, y + 20, { steps: 5 }); await page.mouse.up();
   expect((await board(page)).nodes[0].width).toBeGreaterThan(300);
 });
+for (const dimensions of [{ width: 24, height: 100 }, { width: 184, height: 24 }]) {
+  test(`tiny ${dimensions.width} by ${dimensions.height} shape has a readable editor without blocking handles`, async ({ page }) => {
+    await page.goto('/');
+    await page.locator('input[type=file]').setInputFiles({ name: 'tiny.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ title: 'Tiny editor', nodes: [{ id: 'tiny', kind: 'rectangle', x: 0, y: 0, ...dimensions, text: 'Before', color: '#ffffff' }], edges: [] })) });
+    await expect(page.getByLabel('Board title')).toHaveValue('Tiny editor');
+    await page.getByRole('button', { name: 'Toggle layers', exact: true }).click();
+    await page.getByRole('complementary').getByRole('button', { name: 'Before', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit text', exact: true }).click();
+    const editor = page.getByRole('textbox', { name: 'Shape text' });
+    await editor.fill('Readable text');
+    const space = await editor.evaluate(el => {
+      const style = getComputedStyle(el), rect = el.getBoundingClientRect();
+      return { width: el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight), height: el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom), line: parseFloat(style.fontSize) * 1.45, top: rect.top, bottom: rect.bottom };
+    });
+    expect(space.width).toBeGreaterThanOrEqual(100); expect(space.height).toBeGreaterThanOrEqual(space.line);
+    const canvas = (await page.locator('canvas').boundingBox())!;
+    const top = canvas.y + (canvas.height - dimensions.height) / 2;
+    expect(space.bottom <= top - 12 || space.top >= top + dimensions.height + 12).toBe(true);
+    await editor.press('Enter');
+    expect((await board(page)).nodes[0].text).toBe('Readable text');
+  });
+}
 for (const kind of ['Rectangle (R)', 'Sticky note (S)', 'Text (T)', 'image']) {
   for (const zoomed of [false, true]) {
     test(`${kind} resizes immediately and after selection at ${zoomed ? '83' : '100'} percent`, async ({ page }) => {
