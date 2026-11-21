@@ -15,7 +15,7 @@ const list = <T>(v: unknown, name: string) => Array.isArray(v) && v.length ? v a
 export function color(v: unknown) {
   if (v === undefined) return undefined;
   const c = typeof v === 'string' ? v.trim().toLowerCase() : '';
-  return NAMED_COLORS[c] ?? (/^#[0-9a-f]{6}$/.test(c) ? c : fail(`Unknown colour "${String(v)}". Use ${Object.keys(NAMED_COLORS).join(', ')} or #rrggbb.`));
+  return (Object.hasOwn(NAMED_COLORS, c) ? NAMED_COLORS[c] : undefined) ?? (/^#[0-9a-f]{6}$/.test(c) ? c : fail(`Unknown colour "${String(v)}". Use ${Object.keys(NAMED_COLORS).join(', ')} or #rrggbb.`));
 }
 
 const round = (n: number) => Math.round(n * 10) / 10;

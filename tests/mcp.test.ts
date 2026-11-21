@@ -50,6 +50,7 @@ describe('board commands', () => {
     expect(() => applyCommand(sample(), 'update_shapes', { shapes: [] })).toThrow(/non-empty/);
     expect(() => applyCommand(sample(), 'nope', {})).toThrow(/Unknown command/);
     expect(() => color('teal')).toThrow(/Unknown colour/);
+    for (const name of ['constructor', 'toString', '__proto__']) expect(() => color(name)).toThrow(/Unknown colour/);
   });
   it('runs the text fitter on added and edited shapes', () => {
     const fit = (n: ReturnType<typeof makeShape>) => ({ ...n, height: 999 });
