@@ -189,17 +189,18 @@ export default function App() {
       // Do not resume editing with the remaining finger after a pinch.
       if (gesture.current) return;
     }
-    if (editing) return;
     if (!board || e.button > 1) return;
+    const current = committed ?? snapshot(board);
+    const screen = screenPoint(e), start = world(screen), n = hitNode(current.nodes, start);
+    const members = current.nodes.filter(n => selected.includes(n.id)), box = members.length ? bounds(members) : null;
+    const handle = box && resizeHandles(box, view.zoom).find(p => Math.hypot(start.x - p.x, start.y - p.y) < 12 / view.zoom);
+    if (editing && !handle) return;
     setExportOpen(false); e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId);
-    const screen = screenPoint(e), start = world(screen), n = hitNode(board.nodes, start);
     if (n?.kind === 'link' && (e.ctrlKey || e.metaKey)) { openLink(n); return; }
-    const base = { start, screen, scene: snapshot(board), ids: selected, view, changed: false };
+    const base = { start, screen, scene: current, ids: selected, view, changed: false };
     if (tool === 'hand' || e.button === 1 || e.altKey) { drag.current = { ...base, type: 'pan' }; return; }
     if (tool === 'connector') { if (!n) { setSource(null); return; } if (!source) setSource(n.id); else if (source !== n.id) { const edge: Connector = { id: uid(), source, target: n.id, text: '' }; change({ ...snapshot(board), edges: [...board.edges, edge] }); setSelected([edge.id]); setSource(null); setTool('select'); } return; }
     if (tool !== 'select' && tool !== 'image') { const next = fitText(makeShape(tool as Kind, start.x, start.y)); setSelected([next.id]); drag.current = { ...base, ids: [next.id], type: 'create', changed: true, pendingShape: next }; return; }
-    const members = board.nodes.filter(n => selected.includes(n.id)), box = members.length ? bounds(members) : null;
-    const handle = box && resizeHandles(box, view.zoom).find(p => Math.hypot(start.x - p.x, start.y - p.y) < 12 / view.zoom);
     if (handle) { drag.current = { ...base, type: 'resize', corner: handle.corner }; return; }
     if (n) { const unit = expandSelection(board.nodes, [n.id]), ids = e.shiftKey ? selected.includes(n.id) ? selected.filter(id => !unit.includes(id)) : [...new Set([...selected, ...unit])] : selected.includes(n.id) ? selected : unit; setSelected(ids); drag.current = { ...base, ids, type: 'move' }; }
     else { const edge = hitEdge(board.edges, board.nodes, start, 8 / view.zoom); if (edge) setSelected([edge.id]); else { if (!e.shiftKey) setSelected([]); drag.current = { ...base, ids: e.shiftKey ? selected : [], type: 'marquee' }; } }
@@ -224,7 +225,14 @@ export default function App() {
     if (!d.changed) return;
     if (d.type === 'pan') setView({ ...d.view, x: d.view.x + screen.x - d.screen.x, y: d.view.y + screen.y - d.screen.y });
     else if (d.type === 'move') updateScene({ ...d.scene, nodes: d.scene.nodes.map(n => d.ids.includes(n.id) ? { ...n, x: n.x + Math.round(dx / 8) * 8, y: n.y + Math.round(dy / 8) * 8 } : n) });
-    else if (d.type === 'resize') updateScene({ ...d.scene, nodes: resizeSelection(d.scene.nodes, d.ids, dx, dy, d.corner) });
+    else if (d.type === 'resize') {
+      const nodes = resizeSelection(d.scene.nodes, d.ids, dx, dy, d.corner).map(n => {
+        if (d.ids.length !== 1 || !d.ids.includes(n.id)) return n;
+        const fitted = fitText(n);
+        return d.corner?.includes('n') ? { ...fitted, y: n.y + n.height - fitted.height } : fitted;
+      });
+      updateScene({ ...d.scene, nodes });
+    }
     else if (d.type === 'create' && latest.current) { const n = latest.current.nodes.find(n => n.id === d.ids[0]) ?? d.pendingShape; if (!n) return; if (Math.abs(dx) > 6 || Math.abs(dy) > 6) updateScene({ ...d.scene, nodes: [...d.scene.nodes, fitText({ ...n, x: Math.min(d.start.x, d.start.x + dx), y: Math.min(d.start.y, d.start.y + dy), width: Math.max(48, Math.abs(dx)), height: Math.max(40, Math.abs(dy)) })] }); }
     else if (d.type === 'marquee') setMarquee({ a: d.start, b: p });
   };
