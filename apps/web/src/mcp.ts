@@ -93,14 +93,19 @@ export function mcpPort() {
   try { const port = Number(localStorage.getItem(MCP_PORT_KEY)); return Number.isInteger(port) && port > 0 && port < 65536 ? port : 7331; } catch { return 7331; }
 }
 
-// Keeps a WebSocket open to the local whirl-mcp server, reconnecting until stopped.
-export function connectMcp(handler: () => McpHandler, onStatus: (status: McpStatus) => void, port = mcpPort()) {
+// Keeps a WebSocket open to the local whirl-mcp server, reconnecting until stopped or until a newer tab takes over.
+export function connectMcp(handler: () => McpHandler, onStatus: (status: McpStatus) => void, onReplaced = () => {}, port = mcpPort()) {
   let socket: WebSocket | null = null, retry: ReturnType<typeof setTimeout> | undefined, stopped = false;
   const open = () => {
     onStatus('connecting');
     socket = new WebSocket(`ws://127.0.0.1:${port}`);
     socket.onopen = () => onStatus('connected');
-    socket.onclose = () => { socket = null; if (!stopped) { onStatus('connecting'); retry = setTimeout(open, 2000); } };
+    socket.onclose = event => {
+      socket = null;
+      if (stopped) return;
+      if (event.code === 4000) { stopped = true; onStatus('off'); onReplaced(); return; }
+      onStatus('connecting'); retry = setTimeout(open, 2000);
+    };
     socket.onmessage = async event => {
       let id: unknown;
       try {

@@ -31,3 +31,24 @@ test('an MCP client can read and edit the open board through the plug connection
     await expect(plug).toHaveAttribute('aria-pressed', 'false');
   } finally { await bridge.close(); }
 });
+
+test('a newer tab takes over the MCP connection without the tabs fighting over it', async ({ page, context }) => {
+  const bridge = await startBridge({ port: 0 });
+  try {
+    await context.addInitScript(port => localStorage.setItem('whirl.mcp.port', String(port)), bridge.port);
+    await page.goto('/');
+    const plug = (p: typeof page) => p.getByRole('button', { name: 'Connect AI assistant (MCP)' });
+    await plug(page).click();
+    await expect(plug(page)).toHaveClass(/connected/);
+    const other = await context.newPage(); await other.goto('/');
+    await expect(plug(other)).toHaveAttribute('aria-pressed', 'true');
+    await expect(plug(other)).toHaveClass(/connected/);
+    await expect(page.getByRole('status')).toContainText('Another Whirl tab took over');
+    await expect(plug(page)).toHaveAttribute('aria-pressed', 'false');
+    await page.waitForTimeout(2500);
+    await expect(plug(page)).toHaveAttribute('aria-pressed', 'false');
+    await expect(plug(other)).toHaveClass(/connected/);
+    await other.reload();
+    await expect(plug(other)).toHaveAttribute('aria-pressed', 'true');
+  } finally { await bridge.close(); }
+});
