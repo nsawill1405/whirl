@@ -1,6 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeShape } from '../packages/scene/src';
-import { getVideo, growText, textSize, toggleVideo, videos, wrap } from '../apps/web/src/render';
+import { getVideo, gridSize, growText, paint, textSize, toggleVideo, videos, wrap } from '../apps/web/src/render';
+
+describe('canvas grid', () => {
+  it('keeps dots visible and spacing readable across the full zoom range', () => {
+    for (let i = 10; i <= 300; i++) {
+      const zoom = i / 100, { step, radius } = gridSize(zoom);
+      expect(radius).toBeGreaterThanOrEqual(0.8);
+      expect(step).toBeGreaterThanOrEqual(12);
+      expect(Math.log2(step / (24 * zoom))).toBeCloseTo(Math.round(Math.log2(step / (24 * zoom))));
+    }
+    expect(gridSize(0.1).radius).toBeLessThan(gridSize(1).radius);
+    expect(gridSize(1)).toEqual({ step: 24, radius: 1.2 });
+    expect(gridSize(3).step).toBe(72);
+    expect(gridSize(3).radius).toBeCloseTo(3.6);
+  });
+  it.each([0.1, 1, 3])('draws dots on an empty board at zoom %s and omits them for exports', zoom => {
+    const radii: number[] = [];
+    const context = { clearRect() {}, fillRect() {}, save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, fill() {}, arc(_x: number, _y: number, radius: number) { radii.push(radius); } } as unknown as CanvasRenderingContext2D;
+    paint(context, { nodes: [], edges: [] }, { x: -7, y: -11, zoom }, 100, 100);
+    expect(radii.length).toBeGreaterThan(0);
+    expect(radii.every(radius => radius === gridSize(zoom).radius)).toBe(true);
+    radii.length = 0;
+    paint(context, { nodes: [], edges: [] }, { x: 0, y: 0, zoom }, 100, 100, [], false, false);
+    expect(radii).toEqual([]);
+  });
+});
 
 const ctx = { font: '', measureText: (s: string) => ({ width: s.length * 8 }) } as CanvasRenderingContext2D;
 describe('video playback', () => {
