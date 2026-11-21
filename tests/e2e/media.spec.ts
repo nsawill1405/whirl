@@ -71,6 +71,30 @@ test('media can be dropped and pasted', async ({ page }) => {
   }
 });
 
+test('keyboard paste prioritizes native media and otherwise pastes shapes exactly once', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'My boards' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New board', exact: true }).click();
+  await page.locator('canvas').focus();
+  await page.keyboard.press('r'); await page.keyboard.press('Enter');
+  await page.keyboard.press('Control+c');
+  await page.evaluate(async () => {
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 32;
+    canvas.getContext('2d')!.fillRect(0, 0, 32, 32);
+    const png = await new Promise<Blob>(resolve => canvas.toBlob(blob => resolve(blob!)));
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+  });
+  await page.keyboard.press('Control+v');
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /2 shapes/);
+  expect(JSON.parse(await exported(page)).nodes.map((n: { kind: string }) => n.kind)).toEqual(['rectangle', 'image']);
+  await page.evaluate(() => navigator.clipboard.writeText('No media in this clipboard'));
+  await page.locator('canvas').focus();
+  await page.keyboard.press('Control+v');
+  await expect(page.locator('canvas')).toHaveAttribute('aria-label', /3 shapes/);
+  expect(JSON.parse(await exported(page)).nodes.map((n: { kind: string }) => n.kind)).toEqual(['rectangle', 'image', 'rectangle']);
+});
+
 test('invalid video imports report an error without creating a shape', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /shapes/);

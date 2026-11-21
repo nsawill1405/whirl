@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { pasteShortcut } from './clipboard';
 import type { Board } from '../../packages/scene/src';
 
 const fixture = {
@@ -70,8 +71,8 @@ test('duplicate does not replace a copied snapshot or reset successive paste off
   await page.keyboard.press('Tab');
   await page.keyboard.press('Space');
   await page.keyboard.press(`${modifier}+d`);
-  await page.keyboard.press(`${modifier}+v`);
-  await page.keyboard.press(`${modifier}+v`);
+  await pasteShortcut(page, modifier);
+  await pasteShortcut(page, modifier);
   const board = await exported(page);
   expect(board.nodes).toHaveLength(6);
   expect(board.nodes[3]).toMatchObject({ kind: 'sticky', text: 'Other note', x: 482, y: 232 });
@@ -106,7 +107,7 @@ test('Layers supports keyboard subset selection, help retains it, and pasted con
   await expect(note).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('textbox', { name: 'Shape text' })).toHaveCount(0);
   await page.keyboard.press(`${modifier}+c`);
-  await page.keyboard.press(`${modifier}+v`);
+  await pasteShortcut(page, modifier);
   const board = await exported(page);
   expect(board.nodes).toHaveLength(5);
   expect(board.edges).toHaveLength(2);
@@ -144,7 +145,7 @@ test('select all, empty-selection copy, delete/undo, autosave, and modified zoom
   await page.keyboard.press(`${modifier}+c`);
   await page.keyboard.press('Escape');
   await page.keyboard.press(`${modifier}+c`);
-  await page.keyboard.press(`${modifier}+v`);
+  await pasteShortcut(page, modifier);
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /6 shapes/);
   await page.keyboard.press('Backspace');
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /3 shapes/);

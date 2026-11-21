@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { pasteShortcut } from './clipboard';
 import { bounds, type Board } from '../../packages/scene/src';
 
 const fixture = {
@@ -59,7 +60,7 @@ for (const modifier of ['Control', 'Meta']) {
     const resized = await board(page);
     for (const i of [0, 1]) { expect(resized.nodes[i].width).toBeGreaterThan(moved.nodes[i].width); expect(resized.nodes[i].height).toBeGreaterThan(moved.nodes[i].height); }
     expect(resized.nodes[2]).toEqual(grouped.nodes[2]);
-    await page.locator('canvas').focus(); await page.keyboard.press(`${modifier}+c`); await page.keyboard.press(`${modifier}+v`);
+    await page.locator('canvas').focus(); await page.keyboard.press(`${modifier}+c`); await pasteShortcut(page, modifier);
     const copied = await board(page);
     expect(copied.nodes).toHaveLength(5); expect(copied.edges).toHaveLength(3);
     expect(copied.nodes[3].groupId).toBe(copied.nodes[4].groupId); expect(copied.nodes[3].groupId).not.toBe(id);

@@ -102,9 +102,9 @@ export default function App() {
       if (modal) { if (e.key === 'Escape') setModal(null); return; }
       const cmd = e.metaKey || e.ctrlKey, key = e.key.toLowerCase();
       if (e.altKey) return;
-      if (cmd && ['z','y','c','v','d','a','s','g'].includes(key)) {
+      if (cmd && ['z','y','c','d','a','s','g'].includes(key)) {
         e.preventDefault();
-        if (key === 'z') e.shiftKey ? redo() : undo(); else if (key === 'y') redo(); else if (key === 'c') copy(); else if (key === 'v') paste(); else if (key === 'g') group(e.shiftKey); else if (key === 'a') setSelected(latest.current?.nodes.map(n => n.id) ?? []); else if (key === 'd') { const b = latest.current; if (b) paste(selectionScene(b, selected)); } else notify('Your boards save automatically on this device.');
+        if (key === 'z') e.shiftKey ? redo() : undo(); else if (key === 'y') redo(); else if (key === 'c') copy(); else if (key === 'g') group(e.shiftKey); else if (key === 'a') setSelected(latest.current?.nodes.map(n => n.id) ?? []); else if (key === 'd') { const b = latest.current; if (b) paste(selectionScene(b, selected)); } else notify('Your boards save automatically on this device.');
       } else if (cmd) return;
       else if (e.key === ' ' && selected.length === 1 && latest.current?.nodes.find(n => n.id === selected[0])?.video && !(e.target as HTMLElement).closest('button,a,select')) { e.preventDefault(); if (!e.repeat) toggle(latest.current.nodes.find(n => n.id === selected[0])!.video!); }
       else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(); }
@@ -280,9 +280,10 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const pasteMedia = (event: ClipboardEvent) => {
-      if ((event.target as HTMLElement).closest('input,textarea,[contenteditable=true]')) return;
+      if (event.defaultPrevented || modal || (event.target as HTMLElement).closest('input,textarea,[contenteditable=true]')) return;
       const file = Array.from(event.clipboardData?.files ?? []).find(file => /^(image|video)\//.test(file.type));
-      if (file) { event.preventDefault(); void importFile(file); }
+      event.preventDefault();
+      if (file) void importFile(file); else paste();
     };
     const dropMedia = (event: DragEvent) => { event.preventDefault(); void importFile(event.dataTransfer?.files[0]); };
     const allowDrop = (event: DragEvent) => event.preventDefault();
