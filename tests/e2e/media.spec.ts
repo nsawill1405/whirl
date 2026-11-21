@@ -12,7 +12,7 @@ async function changingPixels(page: Page) {
   await expect.poll(() => page.locator('canvas').evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).not.toBe(initial);
 }
 
-test('animated GIF and video import, playback, persistence, and export', async ({ page }) => {
+test('animated GIF and video import, playback, persistence, and export', async ({ page }, testInfo) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'My boards' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'New board', exact: true }).click();
@@ -50,7 +50,7 @@ test('animated GIF and video import, playback, persistence, and export', async (
   await expect(page.locator('canvas')).toHaveAttribute('aria-label', /2 shapes/);
   expect(JSON.parse(await exported(page)).nodes).toEqual(board.nodes);
   await changingPixels(page);
-  await page.screenshot({ path: '/home/ubuntu/whirl-media.png' });
+  await page.screenshot({ path: testInfo.outputPath('whirl-media.png') });
   await page.getByLabel('Import file').setInputFiles({ name: 'roundtrip.whirl.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(board)) });
   await expect(page.getByText('Board imported. Make yourself at home.')).toBeVisible();
   expect(JSON.parse(await exported(page)).nodes).toEqual(board.nodes);
