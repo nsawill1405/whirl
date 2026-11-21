@@ -4,7 +4,8 @@ COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY packages/scene/package.json packages/scene/package.json
 COPY packages/mcp/package.json packages/mcp/package.json
-RUN npm ci
+COPY apps/desktop/package.json apps/desktop/package.json
+RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
 COPY . .
 RUN npm run build
 FROM nginx:1.28-alpine

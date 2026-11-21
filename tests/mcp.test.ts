@@ -70,6 +70,7 @@ describe('MCP bridge', () => {
   it('only accepts local origins unless more are allowed', () => {
     expect(allowedOrigin('http://localhost:5173')).toBe(true);
     expect(allowedOrigin('http://127.0.0.1')).toBe(true);
+    expect(allowedOrigin('app://whirl')).toBe(true);
     expect(allowedOrigin('https://evil.example')).toBe(false);
     expect(allowedOrigin(undefined)).toBe(false);
     expect(allowedOrigin('https://whirl.example', ['https://whirl.example'])).toBe(true);

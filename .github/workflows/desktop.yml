@@ -1,0 +1,49 @@
+name: Desktop
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, name: linux, flag: --linux}
+          - { os: macos-latest, name: macos, flag: --mac}
+          - { os: windows-latest, name: windows, flag: --win}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:desktop
+      - name: Smoke test
+        shell: bash
+        run: ${{ matrix.os == 'ubuntu-latest' && 'xvfb-run -a ' || '' }}npm run test:desktop
+      - name: Package
+        run: npx electron-builder --publish never ${{ matrix.flag }}
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Whirl-${{ matrix.name }}
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: desktop-traces-${{ matrix.name }}
+          path: test-results/
