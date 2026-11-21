@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { makeShape } from '../packages/scene/src';
 import { gridSize, growText, paint, textSize, wrap } from '../apps/web/src/render';
 
@@ -29,6 +29,14 @@ describe('canvas grid', () => {
 
 const ctx = { font: '', measureText: (s: string) => ({ width: s.length * 8 }) } as CanvasRenderingContext2D;
 describe('brainstorm text layout', () => {
+  it.each([[true, '#ffffff', '#302e3e'], [true, '#eee9ff', '#eee9ff'], [false, '#ffffff', '#ffffff']] as const)('paints link fills in dark=%s with color %s', (dark, color, expected) => {
+    const fills: string[] = [], context = new Proxy({ fillStyle: '', measureText: (text: string) => ({ width: text.length * 8 }), fill() { fills.push(this.fillStyle); } }, { get(target, key) { return key in target ? Reflect.get(target, key) : () => {}; } });
+    vi.stubGlobal('Path2D', class {});
+    try {
+      paint(context as unknown as CanvasRenderingContext2D, { nodes: [{ ...makeShape('link', 0, 0), color, text: 'Example', url: 'https://example.com' }], edges: [] }, { x: 0, y: 0, zoom: 1 }, 800, 600, [], dark, false);
+      expect(fills).toEqual([expected]);
+    } finally { vi.unstubAllGlobals(); }
+  });
   it.each(['sticky', 'text'] as const)('grows %s to preserve every line without shrinking the font', kind => {
     const n = { ...makeShape(kind, 0, 0), text: 'One\nTwo\nThree\nFour\nFive\nSix\nSeven' };
     const grown = growText(n, ctx);

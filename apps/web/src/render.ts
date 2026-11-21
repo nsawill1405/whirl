@@ -1,4 +1,4 @@
-import { normalizeUrl, bounds, edgeMiddle, route, type Scene, type Shape, type Point } from '@whirl/scene';
+import { normalizeUrl, bounds, COLORS, edgeMiddle, route, type Scene, type Shape, type Point } from '@whirl/scene';
 export type View = Point & { zoom: number };
 export function gridSize(zoom: number) {
   const step = 24 * zoom;
@@ -64,7 +64,7 @@ export function paint(ctx: CanvasRenderingContext2D, scene: Scene, view: View, w
     else ctx.roundRect(n.x, n.y, n.width, n.height, n.kind === 'sticky' ? 3 : 10);
     if (n.kind !== 'text') {
       if (n.kind === 'sticky') { ctx.shadowColor = '#30284b16'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4; }
-      ctx.fillStyle = n.kind === 'link' && dark ? '#302e3e' : n.color; ctx.fill(); ctx.shadowColor = 'transparent';
+      ctx.fillStyle = n.kind === 'link' && dark && n.color === COLORS[0] ? '#302e3e' : n.color; ctx.fill(); ctx.shadowColor = 'transparent';
       ctx.strokeStyle = n.kind === 'sticky' ? '#0000000d' : '#62587942'; ctx.lineWidth = 1.4; ctx.stroke();
       if (n.kind === 'image' && n.image) { const img = images.get(n.image); if (img?.complete && img.naturalWidth) { ctx.save(); ctx.clip(); ctx.drawImage(img, n.x, n.y, n.width, n.height); ctx.restore(); } }
     }
