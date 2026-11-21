@@ -5,15 +5,18 @@
   "type": "module",
   "workspaces": [
     "apps/web",
-    "packages/scene"
+    "packages/scene",
+    "packages/mcp"
   ],
   "scripts": {
     "dev": "npm run dev -w @whirl/web -- --host 0.0.0.0",
-    "build": "npm run build -w @whirl/web",
+    "build": "npm run build -w @whirl/web && npm run build:mcp",
     "start": "npm run preview -w @whirl/web -- --host 0.0.0.0 --port 4173",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "build:mcp": "npm run build -w @whirl/mcp",
+    "mcp": "node packages/mcp/dist/index.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",

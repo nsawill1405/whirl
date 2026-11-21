@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2c5364?style=for-the-badge" alt="License" /></a>
 </p>
 
-<p><a href="#what-works-today">What works today</a> · <a href="#run-locally">Run locally</a> · <a href="#your-data">Your data</a> · <a href="#controls">Controls</a> · <a href="#development">Development</a> · <a href="#license">License</a></p>
+<p><a href="#what-works-today">What works today</a> · <a href="#run-locally">Run locally</a> · <a href="#your-data">Your data</a> · <a href="#controls">Controls</a> · <a href="#ai-assistants-mcp">AI assistants (MCP)</a> · <a href="#development">Development</a> · <a href="#license">License</a></p>
 
 </div>
 
@@ -25,8 +25,9 @@
 - Multiple boards, IndexedDB autosave, and flowchart/retrospective templates.
 - PNG, SVG, and editable `.whirl.json` exports; import boards and images.
 - Responsive tools and keyboard-accessible layers for selecting objects.
+- An optional local MCP server so AI assistants (Claude, Cursor, and others) can read and edit the open board.
 
-**This is the first local-first release, not a multiplayer service.** Real-time collaboration, mind-map mode, PDF export, and accounts are not implemented. The next milestone is Yjs sync with a small Node/WebSocket server and durable server-side storage. The browser editor does not need a server API today.
+**This is the first local-first release, not a multiplayer service.** Real-time collaboration, mind-map mode, PDF export, and accounts are not implemented. The next milestone is Yjs sync with a small Node/WebSocket server and durable server-side storage. The browser editor does not need a server API today; the MCP server is optional.
 
 ## Run locally
 
@@ -81,9 +82,30 @@ On touch screens, choose Pan to move the viewport; use the zoom buttons to zoom.
 
 Use the selection bar's Group/Ungroup buttons or the shortcuts above. Clicking any member (including in Layers) selects its whole group; drag the shared bottom-right handle to resize it. Groups save with the board and JSON backups, and copies get independent groups. Grouping existing groups combines them into one flat group; ungroup before editing individual members. Choose **Export → Selection as PNG/SVG/JSON** to export just the selected group and its internal connectors without changing whole-board exports.
 
+## AI assistants (MCP)
+
+Whirl ships a [Model Context Protocol](https://modelcontextprotocol.io) server in `packages/mcp`. Your AI app starts it over stdio, and it listens on `ws://127.0.0.1:7331` for the Whirl tab. Boards still live only in your browser: the server relays tool calls to the open tab and keeps nothing.
+
+```sh
+npm install
+npm run build:mcp
+```
+
+Add it to your MCP client, for example in Claude Desktop's `claude_desktop_config.json`:
+
+```json
+{ "mcpServers": { "whirl": { "command": "node", "args": ["/path/to/whirl/packages/mcp/dist/index.js"] } } }
+```
+
+Then open Whirl and click the plug icon in the header. A green dot means the assistant is connected; click it again to disconnect. Whirl remembers the choice.
+
+Tools: `list_boards`, `open_board`, `create_board`, `rename_board`, `get_board`, `add_shapes`, `update_shapes`, `connect_shapes`, `update_connectors`, `delete_items`, `group_shapes`, `fit_view`, and `connection_status`. Assistant edits go through normal undo/redo.
+
+The server only binds to `127.0.0.1` and only accepts `localhost`/`127.0.0.1` pages. Set `WHIRL_MCP_ORIGINS=https://your-whirl-host` to allow a self-hosted copy (your browser may ask to allow access to local devices), and `WHIRL_MCP_PORT` to change the port. If you change the port, run `localStorage.setItem('whirl.mcp.port', '<port>')` in the Whirl tab's console. Only one tab can be connected at a time; the newest tab wins.
+
 ## Development
 
-`apps/web` is a React/Vite editor. `packages/scene` owns the portable scene model, geometry, validation, and connector routing. Rendering uses a high-DPI HTML canvas with viewport culling and cached routes; text editing uses an HTML overlay. There is no backend or secret configuration to set up.
+`apps/web` is a React/Vite editor. `packages/scene` owns the portable scene model, geometry, validation, and connector routing. `packages/mcp` is the optional stdio MCP server and its WebSocket bridge to the editor. Rendering uses a high-DPI HTML canvas with viewport culling and cached routes; text editing uses an HTML overlay. There is no backend or secret configuration to set up.
 
 ```sh
 npm run typecheck

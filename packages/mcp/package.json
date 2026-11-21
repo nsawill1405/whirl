@@ -1,0 +1,19 @@
+{
+  "name": "@whirl/mcp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "whirl-mcp": "./dist/index.js" },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/index.js --banner:js=\"#!/usr/bin/env node\nimport { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "ws": "^8.18.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.2"
+  }
+}
