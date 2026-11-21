@@ -8,7 +8,15 @@ export async function documentText(file: DocumentFile): Promise<string[]> {
   if (['txt', 'csv', 'md'].includes(ext)) return [new TextDecoder().decode(documentBytes(file))];
   if (!['docx', 'pptx'].includes(ext)) return [];
   const { default: JSZip } = await import('jszip'), zip = await JSZip.loadAsync(documentBytes(file));
-  const names = ext === 'docx' ? ['word/document.xml'] : Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => Number(a.match(/slide(\d+)/)![1]) - Number(b.match(/slide(\d+)/)![1]));
+  let names = ext === 'docx' ? ['word/document.xml'] : Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => Number(a.match(/slide(\d+)/)![1]) - Number(b.match(/slide(\d+)/)![1]));
+  if (ext === 'pptx') {
+    const presentation = await zip.file('ppt/presentation.xml')?.async('string'), relationships = await zip.file('ppt/_rels/presentation.xml.rels')?.async('string');
+    if (presentation && relationships) {
+      const parser = new DOMParser(), slides = Array.from(parser.parseFromString(presentation, 'application/xml').getElementsByTagNameNS('*', 'sldId')), rels = Array.from(parser.parseFromString(relationships, 'application/xml').getElementsByTagNameNS('*', 'Relationship'));
+      const ordered = slides.map(slide => { const id = slide.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id'), rel = rels.find(rel => rel.getAttribute('Id') === id); if (!rel || rel.getAttribute('TargetMode') === 'External') return ''; const url = new URL(rel.getAttribute('Target') ?? '', 'https://document.local/ppt/'), path = decodeURIComponent(url.pathname.slice(1)); return url.origin === 'https://document.local' && /^ppt\/slides\/[^/]+\.xml$/.test(path) && zip.file(path) ? path : ''; });
+      if (ordered.length && ordered.every(Boolean)) names = ordered;
+    }
+  }
   return Promise.all(names.map(async name => { const xml = await zip.file(name)?.async('string'); if (!xml) throw new Error('This document has no readable content.'); const dom = new DOMParser().parseFromString(xml, 'application/xml'); return Array.from(dom.getElementsByTagNameNS('*', 't')).map(n => n.textContent).join('\n'); }));
 }
 export async function documentThumbnail(file: DocumentFile): Promise<HTMLImageElement> {
