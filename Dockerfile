@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY packages/scene/package.json packages/scene/package.json
+COPY packages/mcp/package.json packages/mcp/package.json
 RUN npm ci
 COPY . .
 RUN npm run build
