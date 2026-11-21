@@ -63,13 +63,26 @@ export function cloneScene(scene: Scene, offset: number): Scene {
     edges: scene.edges.map(e => ({ ...e, id: uid(), source: ids.get(e.source)!, target: ids.get(e.target)! })),
   };
 }
+function resizeExtent(members: Shape[], dx: number, dy: number, corner: string) {
+  const b = bounds(members), west = corner.includes('w'), north = corner.includes('n');
+  const width = b.width + (west ? -dx : dx), height = b.height + (north ? -dy : dy);
+  return { b, west, north, width, height, flipX: width < 0, flipY: height < 0 };
+}
+// Dragging a handle past the opposite edge flips the selection onto that side.
+export function resizeCorner(nodes: Shape[], ids: string[], dx: number, dy: number, corner = 'se'): string {
+  const selected = new Set(expandSelection(nodes, ids)), members = nodes.filter(n => selected.has(n.id));
+  if (!members.length) return corner;
+  const { west, north, flipX, flipY } = resizeExtent(members, dx, dy, corner);
+  return `${north !== flipY ? 'n' : 's'}${west !== flipX ? 'w' : 'e'}`;
+}
 export function resizeSelection(nodes: Shape[], ids: string[], dx: number, dy: number, corner = 'se'): Shape[] {
   const selected = new Set(expandSelection(nodes, ids)), members = nodes.filter(n => selected.has(n.id));
   if (!members.length) return nodes;
-  const b = bounds(members), west = corner.includes('w'), north = corner.includes('n');
-  const sx = Math.max(...members.map(n => 24 / n.width), (b.width + (west ? -dx : dx)) / b.width), sy = Math.max(...members.map(n => 24 / n.height), (b.height + (north ? -dy : dy)) / b.height);
-  const x = b.x + (west ? b.width * (1 - sx) : 0), y = b.y + (north ? b.height * (1 - sy) : 0);
-  return nodes.map(n => selected.has(n.id) ? { ...n, x: x + (n.x - b.x) * sx, y: y + (n.y - b.y) * sy, width: Math.max(24, n.width * sx), height: Math.max(24, n.height * sy) } : n);
+  const { b, west, north, width, height, flipX, flipY } = resizeExtent(members, dx, dy, corner);
+  const sx = Math.max(...members.map(n => 24 / n.width), Math.abs(width) / b.width), sy = Math.max(...members.map(n => 24 / n.height), Math.abs(height) / b.height);
+  const anchorX = west ? b.x + b.width : b.x, anchorY = north ? b.y + b.height : b.y;
+  const x = west !== flipX ? anchorX - b.width * sx : anchorX, y = north !== flipY ? anchorY - b.height * sy : anchorY;
+  return nodes.map(n => selected.has(n.id) ? { ...n, x: x + (flipX ? b.x + b.width - n.x - n.width : n.x - b.x) * sx, y: y + (flipY ? b.y + b.height - n.y - n.height : n.y - b.y) * sy, width: Math.max(24, n.width * sx), height: Math.max(24, n.height * sy) } : n);
 }
 type Side = 'left' | 'right' | 'top' | 'bottom';
 function anchor(n: Shape, other: Shape, offset: number, side?: Side): { p: Point; out: Point } {

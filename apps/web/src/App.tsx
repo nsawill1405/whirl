@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowDownToLine, ArrowRight, ArrowUpRight, Check, ChevronDown, Circle, Copy, Diamond, Download, FolderOpen, Hand, HelpCircle, ImagePlus, Link, Layers, Maximize, Minus, Moon, MousePointer2, MoveUpRight, Plus, Redo2, RotateCcw, Shapes, Sparkles, Square, StickyNote, Sun, Trash2, Type, Undo2, X, Github, LayoutTemplate, PanelLeftClose, Group, Ungroup } from 'lucide-react';
-import { normalizeUrl, bounds, cloneScene, COLORS, expandSelection, groupShapes, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_DOCUMENT_BYTES, DOCUMENT_TYPES, validDocument, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, resizeSelection, route, selectionScene, uid, type Board, type Connector, type Kind, type Point, type Scene, type Shape } from '@whirl/scene';
+import { normalizeUrl, bounds, cloneScene, COLORS, expandSelection, groupShapes, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_DOCUMENT_BYTES, DOCUMENT_TYPES, validDocument, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, resizeCorner, resizeSelection, route, selectionScene, uid, type Board, type Connector, type Kind, type Point, type Scene, type Shape } from '@whirl/scene';
 import { readyVideo, retainGifs, getVideo, toggleVideo, videos, download, growText, paint, resizeHandles, svg, textSize, type View } from './render';
 import { template } from './templates';
 import { loadActiveBoard, loadBoards, saveActiveBoard, saveBoards } from './storage';
@@ -35,7 +35,7 @@ export default function App() {
   const openDocument = (n: Shape) => { setSelected(ids => expandSelection(latest.current?.nodes ?? [], ids.includes(n.id) ? ids : [n.id])); setDocument(n.file); setModal('document'); };
   const [linkInput, setLinkInput] = useState<string | null>(null);
   const [editing, setEditing] = useState<Edit | null>(null), [source, setSource] = useState<string | null>(null), [pointer, setPointer] = useState<Point>({ x: 0, y: 0 });
-  const [marquee, setMarquee] = useState<{ a: Point; b: Point } | null>(null), [, renderHistory] = useState(0);
+  const [marquee, setMarquee] = useState<{ a: Point; b: Point } | null>(null), [, renderHistory] = useState(0), [cursor, setCursor] = useState<string>();
   const canvas = useRef<HTMLCanvasElement>(null), area = useRef<HTMLDivElement>(null), textInput = useRef<HTMLTextAreaElement>(null), layerList = useRef<HTMLDivElement>(null);
   const modalFocus = useRef<HTMLElement | null>(null), returnToCanvas = useRef(false);
   const setModal = useCallback((next: typeof modal) => { if (next) modalFocus.current = document.activeElement as HTMLElement | null; setModalState(next); }, []);
@@ -111,6 +111,7 @@ export default function App() {
   const group = useCallback((ungroup = false) => { const b = latest.current; if (!b) return; const ids = expandSelection(b.nodes, selected), members = b.nodes.filter(n => ids.includes(n.id)); if (ungroup ? !members.some(n => n.groupId) : members.length < 2 || members.every(n => n.groupId && n.groupId === members[0].groupId)) return; change({ ...snapshot(b), nodes: groupShapes(b.nodes, ids, ungroup) }); setSelected(ids); canvas.current?.focus(); }, [change, selected]);
   const chooseTool = (next: Tool) => { setTool(next); setEditing(null); setSource(null); setSelected([]); canvas.current?.focus(); };
   useEffect(() => { if (layers) layerList.current?.querySelector('button')?.focus(); }, [layers]);
+  useEffect(() => setCursor(undefined), [tool, active]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
@@ -174,6 +175,19 @@ export default function App() {
     drag.current = null; setMarquee(null);
   };
   const fitText = (n: Shape, previous?: Shape) => { const ctx = canvas.current?.getContext('2d'); return ctx ? growText(n, ctx, previous) : n; };
+  const handleAt = (p: Point) => {
+    const members = board?.nodes.filter(n => selected.includes(n.id)) ?? [];
+    if (!members.length) return;
+    const distance = (h: Point) => Math.hypot(p.x - h.x, p.y - h.y);
+    return resizeHandles(bounds(members), view.zoom).sort((a, b) => distance(a) - distance(b)).find(h => distance(h) < 12 / view.zoom);
+  };
+  const resizeCursor = (corner: string) => corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize';
+  const hoverCursor = (e: ReactPointerEvent, p: Point) => {
+    if (tool !== 'select' || e.altKey || !board) return undefined;
+    const handle = handleAt(p);
+    if (handle) return resizeCursor(handle.corner);
+    return hitNode(board.nodes, p) ? 'move' : undefined;
+  };
   const onDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     // Commit an open text draft before taking the reversible touch baseline.
     const committed = editing ? editDone() : undefined;
@@ -192,9 +206,7 @@ export default function App() {
     if (!board || e.button > 1) return;
     const current = committed ?? snapshot(board);
     const screen = screenPoint(e), start = world(screen), n = hitNode(current.nodes, start);
-    const members = board.nodes.filter(n => selected.includes(n.id)), box = members.length ? bounds(members) : null;
-    const distance = (p: Point) => Math.hypot(start.x - p.x, start.y - p.y);
-    const handle = box && resizeHandles(box, view.zoom).sort((a, b) => distance(a) - distance(b)).find(p => distance(p) < 12 / view.zoom);
+    const handle = handleAt(start);
     if (editing && !handle) return;
     setExportOpen(false); e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId);
     if (n?.kind === 'link' && (e.ctrlKey || e.metaKey)) { openLink(n); return; }
@@ -202,7 +214,7 @@ export default function App() {
     if (tool === 'hand' || e.button === 1 || e.altKey) { drag.current = { ...base, type: 'pan' }; return; }
     if (tool === 'connector') { if (!n) { setSource(null); return; } if (!source) setSource(n.id); else if (source !== n.id) { const edge: Connector = { id: uid(), source, target: n.id, text: '' }; change({ ...snapshot(board), edges: [...board.edges, edge] }); setSelected([edge.id]); setSource(null); setTool('select'); } return; }
     if (tool !== 'select' && tool !== 'image') { const next = fitText(makeShape(tool as Kind, start.x, start.y)); setSelected([next.id]); drag.current = { ...base, ids: [next.id], type: 'create', changed: true, pendingShape: next }; return; }
-    if (handle) { drag.current = { ...base, type: 'resize', corner: handle.corner }; return; }
+    if (handle) { drag.current = { ...base, type: 'resize', corner: handle.corner }; setCursor(resizeCursor(handle.corner)); return; }
     if (n) { const unit = expandSelection(board.nodes, [n.id]), ids = e.shiftKey ? selected.includes(n.id) ? selected.filter(id => !unit.includes(id)) : [...new Set([...selected, ...unit])] : selected.includes(n.id) ? selected : unit; setSelected(ids); drag.current = { ...base, ids, type: 'move' }; }
     else { const edge = hitEdge(board.edges, board.nodes, start, 8 / view.zoom); if (edge) setSelected([edge.id]); else { if (!e.shiftKey) setSelected([]); drag.current = { ...base, ids: e.shiftKey ? selected : [], type: 'marquee' }; } }
   };
@@ -220,18 +232,20 @@ export default function App() {
       }
     }
     const screen = screenPoint(e), p = world(screen); if (source) setPointer(p);
-    const d = drag.current; if (!d) return;
+    const d = drag.current; if (!d) { if (e.pointerType !== 'touch') setCursor(hoverCursor(e, p)); return; }
     const dx = (screen.x - d.screen.x) / d.view.zoom, dy = (screen.y - d.screen.y) / d.view.zoom;
     if (Math.abs(dx) + Math.abs(dy) > 3) d.changed = true;
     if (!d.changed) return;
     if (d.type === 'pan') setView({ ...d.view, x: d.view.x + screen.x - d.screen.x, y: d.view.y + screen.y - d.screen.y });
     else if (d.type === 'move') updateScene({ ...d.scene, nodes: d.scene.nodes.map(n => d.ids.includes(n.id) ? { ...n, x: n.x + Math.round(dx / 8) * 8, y: n.y + Math.round(dy / 8) * 8 } : n) });
     else if (d.type === 'resize') {
+      const corner = resizeCorner(d.scene.nodes, d.ids, dx, dy, d.corner);
+      setCursor(resizeCursor(corner));
       const nodes = resizeSelection(d.scene.nodes, d.ids, dx, dy, d.corner).map(n => {
         if (d.ids.length !== 1 || !d.ids.includes(n.id)) return n;
         const original = d.scene.nodes.find(o => o.id === n.id);
         const fitted = fitText(n, Math.abs(dy) < 3 ? original : undefined);
-        return d.corner?.includes('n') ? { ...fitted, y: n.y + n.height - fitted.height } : fitted;
+        return corner.includes('n') ? { ...fitted, y: n.y + n.height - fitted.height } : fitted;
       });
       updateScene({ ...d.scene, nodes });
     }
@@ -366,7 +380,7 @@ export default function App() {
       <div className="header-actions"><button className="button quiet boards-button" aria-label="My boards" title="My boards" onClick={() => setModal('boards')}><FolderOpen size={16}/><span>My boards</span></button><a className="icon-button github-link" href="https://github.com/nsawill1405/whirl" target="_blank" rel="noreferrer" aria-label="Whirl on GitHub"><Github size={18}/></a><span className="header-divider"/><div className="export-wrap"><button className="button primary" aria-expanded={exportOpen} onClick={() => setExportOpen(v => !v)}><ArrowUpRight size={16}/><span>Export</span><ChevronDown size={13}/></button>{exportOpen && <div className="dropdown export-menu"><div className="menu-label">Take your ideas with you</div>{(['png','svg','json'] as const).map(f => <button key={f} onClick={() => exportBoard(f)}><Download size={16}/><span>{f === 'json' ? 'Whirl board' : `${f.toUpperCase()} image`}<small>{f === 'json' ? 'Editable backup · .json' : f === 'svg' ? 'Crisp at any size' : 'Ready to share'}</small></span><span className="file-kind">{f.toUpperCase()}</span></button>)}{selectedNodes.length > 0 && <><div className="menu-label">Selected shapes only</div>{(['png','svg','json'] as const).map(f => <button key={`selection-${f}`} onClick={() => exportBoard(f, true)}><Download size={16}/><span>Selection as {f.toUpperCase()}<small>{f === 'json' ? 'Editable group backup' : 'Only your selected shapes'}</small></span></button>)}</>}</div>}</div></div>
     </header>
     <main className="workspace" ref={area}>
-      <canvas ref={canvas} className={`board-canvas tool-${tool}`} style={{ width: size.width, height: size.height }} tabIndex={0} aria-label={`Whiteboard: ${board?.title ?? 'Loading'}. ${board?.nodes.length ?? 0} shapes. Use the toolbar to add shapes. Open Layers for keyboard selection.`} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(), p = world({ x: e.clientX - r.left, y: e.clientY - r.top }); if (e.dataTransfer.files.length) { void (async () => { for (const file of Array.from(e.dataTransfer.files)) await importFile(file, p); })(); } else { const value = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')).trim(); if (value) addLink(value, p); } }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} onDoubleClick={e => { if (!board || tool !== 'select') return; const r = canvas.current!.getBoundingClientRect(), p = world({ x: e.clientX - r.left, y: e.clientY - r.top }), n = hitNode(board.nodes, p), item = n ?? hitEdge(board.edges, board.nodes, p); if (n?.video) { setSelected(expandSelection(board.nodes, [n.id])); toggle(n); return; } if (n?.kind === 'document') { openDocument(n); return; } if (item && !('kind' in item && (item.kind === 'image' || item.kind === 'document' || item.groupId))) { setSelected([item.id]); setEditing({ id: item.id, text: item.text }); } }}/>
+      <canvas ref={canvas} className={`board-canvas tool-${tool}`} style={{ width: size.width, height: size.height, cursor }} tabIndex={0} aria-label={`Whiteboard: ${board?.title ?? 'Loading'}. ${board?.nodes.length ?? 0} shapes. Use the toolbar to add shapes. Open Layers for keyboard selection.`} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(), p = world({ x: e.clientX - r.left, y: e.clientY - r.top }); if (e.dataTransfer.files.length) { void (async () => { for (const file of Array.from(e.dataTransfer.files)) await importFile(file, p); })(); } else { const value = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')).trim(); if (value) addLink(value, p); } }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} onDoubleClick={e => { if (!board || tool !== 'select') return; const r = canvas.current!.getBoundingClientRect(), p = world({ x: e.clientX - r.left, y: e.clientY - r.top }), n = hitNode(board.nodes, p), item = n ?? hitEdge(board.edges, board.nodes, p); if (n?.video) { setSelected(expandSelection(board.nodes, [n.id])); toggle(n); return; } if (n?.kind === 'document') { openDocument(n); return; } if (item && !('kind' in item && (item.kind === 'image' || item.kind === 'document' || item.groupId))) { setSelected([item.id]); setEditing({ id: item.id, text: item.text }); } }}/>
       <div className="workspace-heading"><span className="eyebrow">YOUR SPACE TO THINK</span><p>Make room for a little possibility.</p></div>
       <div className="canvas-actions"><button className="button floating" onClick={() => newBoard('blank')}><Plus size={16}/><span>New board</span></button><button className="button floating" onClick={() => setModal('templates')}><LayoutTemplate size={16}/><span>Templates</span></button><button className={`icon-button floating ${layers ? 'active' : ''}`} onClick={() => setLayers(v => !v)} aria-label="Toggle layers" aria-expanded={layers}><Layers size={17}/></button></div>
       <nav className="toolbar" aria-label="Drawing tools"><div className="tool-group">{toolList.map(({ id, icon: Icon, label, key }, i) => <div key={id} className={i === 2 || i === 6 ? 'tool-slot divider' : 'tool-slot'}><button className={`tool ${tool === id ? 'active' : ''}`} onClick={() => chooseTool(id)} title={`${label} (${key})`} aria-label={`${label} (${key})`} aria-pressed={tool === id}><Icon size={20} strokeWidth={1.7}/><span className="tool-key">{key}</span></button></div>)}<div className="tool-slot"><button className="tool" title="Import image, document or board" aria-label="Import image or board" onClick={() => fileInput.current?.click()}><ImagePlus size={20} strokeWidth={1.7}/></button></div><div className="tool-slot"><button className="tool" title="Add link" aria-label="Add link" onClick={() => setLinkInput('')}><Link size={20} strokeWidth={1.7}/></button></div></div></nav>
