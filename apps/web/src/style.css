@@ -2,6 +2,7 @@
 @import '@fontsource/dm-sans/500.css';
 @import '@fontsource/dm-sans/600.css';
 @import '@fontsource/dm-sans/700.css';
+.modal.document-modal { width: min(1000px, 96vw); } .document-modal h1 { overflow-wrap: anywhere; padding-right: 32px; font-size: 24px; } .document-preview { margin-top: 20px; max-height: 65vh; overflow: auto; background: #eeedf2; border-radius: 8px; } .document-preview canvas { display: block; max-width: 100%; height: auto; margin: 16px auto; background: white; } .document-page { margin: 18px; padding: 24px; background: white; color: #3e3655; } .document-page pre { white-space: pre-wrap; overflow-wrap: anywhere; } .document-preview .docx-wrapper { padding: 16px; } .document-preview .docx { max-width: 100%; }
 :root { font-family: 'DM Sans', system-ui, sans-serif; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin: 0; overflow: hidden; }
