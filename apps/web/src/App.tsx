@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowDownToLine, ArrowRight, ArrowUpRight, Check, ChevronDown, Circle, Copy, Diamond, Download, FolderOpen, Hand, HelpCircle, ImagePlus, Link, Layers, Maximize, Minus, Moon, MousePointer2, MoveUpRight, Plus, Redo2, RotateCcw, Shapes, Sparkles, Square, StickyNote, Sun, Trash2, Type, Undo2, X, Github, LayoutTemplate, PanelLeftClose, Group, Ungroup } from 'lucide-react';
 import { normalizeUrl, bounds, cloneScene, COLORS, expandSelection, groupShapes, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_DOCUMENT_BYTES, DOCUMENT_TYPES, validDocument, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, resizeSelection, route, selectionScene, uid, type Board, type Connector, type Kind, type Point, type Scene, type Shape } from '@whirl/scene';
-import { readyVideo, retainGifs, getVideo, toggleVideo, videos, download, growText, paint, svg, textSize, type View } from './render';
+import { readyVideo, retainGifs, getVideo, toggleVideo, videos, download, growText, paint, resizeHandles, svg, textSize, type View } from './render';
 import { template } from './templates';
 import { loadActiveBoard, loadBoards, saveActiveBoard, saveBoards } from './storage';
 import { documentThumbnail } from './documents';
@@ -9,7 +9,7 @@ import { documentThumbnail } from './documents';
 const DocumentViewer = lazy(() => import('./DocumentViewer'));
 type Tool = Kind | 'select' | 'hand' | 'connector';
 type Edit = { id: string; text: string };
-type Drag = { type: 'pan' | 'move' | 'resize' | 'marquee' | 'create'; start: Point; screen: Point; scene: Scene; ids: string[]; view: View; changed: boolean; pendingShape?: Shape };
+type Drag = { type: 'pan' | 'move' | 'resize' | 'marquee' | 'create'; start: Point; screen: Point; scene: Scene; ids: string[]; view: View; changed: boolean; pendingShape?: Shape; corner?: string };
 type TouchStart = { scene: Scene; selected: string[]; source: string | null; tool: Tool; undo: Scene[]; redo: Scene[] };
 type Gesture = { center: Point; distance: number; view: View };
 const touchGeometry = (points: Map<number, Point>) => {
@@ -189,17 +189,20 @@ export default function App() {
       // Do not resume editing with the remaining finger after a pinch.
       if (gesture.current) return;
     }
-    if (editing) return;
     if (!board || e.button > 1) return;
+    const current = committed ?? snapshot(board);
+    const screen = screenPoint(e), start = world(screen), n = hitNode(current.nodes, start);
+    const members = board.nodes.filter(n => selected.includes(n.id)), box = members.length ? bounds(members) : null;
+    const distance = (p: Point) => Math.hypot(start.x - p.x, start.y - p.y);
+    const handle = box && resizeHandles(box, view.zoom).sort((a, b) => distance(a) - distance(b)).find(p => distance(p) < 12 / view.zoom);
+    if (editing && !handle) return;
     setExportOpen(false); e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId);
-    const screen = screenPoint(e), start = world(screen), n = hitNode(board.nodes, start);
     if (n?.kind === 'link' && (e.ctrlKey || e.metaKey)) { openLink(n); return; }
-    const base = { start, screen, scene: snapshot(board), ids: selected, view, changed: false };
+    const base = { start, screen, scene: current, ids: selected, view, changed: false };
     if (tool === 'hand' || e.button === 1 || e.altKey) { drag.current = { ...base, type: 'pan' }; return; }
     if (tool === 'connector') { if (!n) { setSource(null); return; } if (!source) setSource(n.id); else if (source !== n.id) { const edge: Connector = { id: uid(), source, target: n.id, text: '' }; change({ ...snapshot(board), edges: [...board.edges, edge] }); setSelected([edge.id]); setSource(null); setTool('select'); } return; }
     if (tool !== 'select' && tool !== 'image') { const next = fitText(makeShape(tool as Kind, start.x, start.y)); setSelected([next.id]); drag.current = { ...base, ids: [next.id], type: 'create', changed: true, pendingShape: next }; return; }
-    const members = board.nodes.filter(n => selected.includes(n.id)), box = members.length ? bounds(members) : null;
-    if (box && Math.hypot(start.x - box.x - box.width - 4, start.y - box.y - box.height - 4) < 12 / view.zoom) { drag.current = { ...base, type: 'resize' }; return; }
+    if (handle) { drag.current = { ...base, type: 'resize', corner: handle.corner }; return; }
     if (n) { const unit = expandSelection(board.nodes, [n.id]), ids = e.shiftKey ? selected.includes(n.id) ? selected.filter(id => !unit.includes(id)) : [...new Set([...selected, ...unit])] : selected.includes(n.id) ? selected : unit; setSelected(ids); drag.current = { ...base, ids, type: 'move' }; }
     else { const edge = hitEdge(board.edges, board.nodes, start, 8 / view.zoom); if (edge) setSelected([edge.id]); else { if (!e.shiftKey) setSelected([]); drag.current = { ...base, ids: e.shiftKey ? selected : [], type: 'marquee' }; } }
   };
@@ -223,7 +226,15 @@ export default function App() {
     if (!d.changed) return;
     if (d.type === 'pan') setView({ ...d.view, x: d.view.x + screen.x - d.screen.x, y: d.view.y + screen.y - d.screen.y });
     else if (d.type === 'move') updateScene({ ...d.scene, nodes: d.scene.nodes.map(n => d.ids.includes(n.id) ? { ...n, x: n.x + Math.round(dx / 8) * 8, y: n.y + Math.round(dy / 8) * 8 } : n) });
-    else if (d.type === 'resize') updateScene({ ...d.scene, nodes: d.ids.length > 1 ? resizeSelection(d.scene.nodes, d.ids, dx, dy) : d.scene.nodes.map(n => d.ids.includes(n.id) ? fitText({ ...n, width: Math.max(48, Math.round((n.width + dx) / 8) * 8), height: Math.abs(dy) < 3 ? n.height : Math.max(40, Math.round((n.height + dy) / 8) * 8) }, Math.abs(dy) < 3 ? n : undefined) : n) });
+    else if (d.type === 'resize') {
+      const nodes = resizeSelection(d.scene.nodes, d.ids, dx, dy, d.corner).map(n => {
+        if (d.ids.length !== 1 || !d.ids.includes(n.id)) return n;
+        const original = d.scene.nodes.find(o => o.id === n.id);
+        const fitted = fitText(n, Math.abs(dy) < 3 ? original : undefined);
+        return d.corner?.includes('n') ? { ...fitted, y: n.y + n.height - fitted.height } : fitted;
+      });
+      updateScene({ ...d.scene, nodes });
+    }
     else if (d.type === 'create' && latest.current) { const n = latest.current.nodes.find(n => n.id === d.ids[0]) ?? d.pendingShape; if (!n) return; if (Math.abs(dx) > 6 || Math.abs(dy) > 6) updateScene({ ...d.scene, nodes: [...d.scene.nodes, fitText({ ...n, x: Math.min(d.start.x, d.start.x + dx), y: Math.min(d.start.y, d.start.y + dy), width: Math.max(48, Math.abs(dx)), height: Math.max(40, Math.abs(dy)) })] }); }
     else if (d.type === 'marquee') setMarquee({ a: d.start, b: p });
   };
@@ -337,6 +348,16 @@ export default function App() {
   const selectedNodes = board?.nodes.filter(n => selected.includes(n.id)) ?? [], singleGroup = selectedNodes.length > 1 && selectedNodes.every(n => n.groupId && n.groupId === selectedNodes[0].groupId);
   const chosenNode = board?.nodes.find(n => n.id === selected[0]), chosenEdge = board?.edges.find(e => e.id === selected[0]);
   const editNode = board?.nodes.find(n => n.id === editing?.id), editEdge = board?.edges.find(e => e.id === editing?.id), editPos = editNode ? fitText({ ...editNode, text: editing!.text }, editNode) : editEdge && board ? { ...edgeMiddle(route(editEdge, board.nodes, board.edges)), width: 160, height: 48 } : null;
+  const detachedEditor = !!editNode && (editNode.width < 48 || editNode.height < 40);
+  const editorRect = editPos ? { x: editPos.x * view.zoom + view.x, y: editPos.y * view.zoom + view.y, width: editNode ? editPos.width * view.zoom : Math.max(100, editPos.width * view.zoom), height: editNode ? editPos.height * view.zoom : Math.max(48, editPos.height * view.zoom) } : null;
+  if (editorRect && detachedEditor && editNode) {
+    const top = editNode.y * view.zoom + view.y, bottom = top + editNode.height * view.zoom;
+    const above = Math.max(0, top - 32), below = Math.max(0, size.height - bottom - 32), placeAbove = above >= below;
+    editorRect.width = Math.min(size.width - 32, Math.max(160, editorRect.width));
+    editorRect.height = Math.min(size.height - 32, Math.max(64, Math.min(editorRect.height, placeAbove ? above : below)));
+    editorRect.x = Math.max(16, Math.min(editorRect.x, size.width - editorRect.width - 16));
+    editorRect.y = Math.max(16, Math.min(placeAbove ? top - editorRect.height - 16 : bottom + 16, size.height - editorRect.height - 16));
+  }
   return <div className={`app ${dark ? 'dark' : ''}`}>
     <header className="topbar">
       <button className="brand" onClick={() => setModal('boards')} title="Your boards"><img src="/icon.svg" alt=""/><span>whirl<span className="brand-dot">.</span></span></button>
@@ -352,7 +373,7 @@ export default function App() {
       {linkInput !== null && <form className="selection-bar" aria-label="Add link" onSubmit={e => { e.preventDefault(); addLink(linkInput); }}><Link size={16}/><input autoFocus aria-label="Link URL" placeholder="https://example.com" value={linkInput} onChange={e => setLinkInput(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setLinkInput(null); canvas.current?.focus(); } }}/><button className="button" type="submit">Add</button><button className="icon-button" type="button" aria-label="Cancel link" onClick={() => setLinkInput(null)}><X size={16}/></button></form>}
       <input type="file" hidden ref={fileInput} accept={".json,.png,.jpg,.jpeg,.webp,image/gif,video/mp4,video/webm,video/ogg," + Object.keys(DOCUMENT_TYPES).map(ext => "." + ext).join(",")} aria-label="Import file" onChange={e => { void importFile(e.target.files?.[0]); e.target.value = ''; }}/>
       {linkInput === null && selected.length > 0 && (size.width > 700 || !layers) && <div className="selection-bar"><span>{singleGroup ? `Group · ${selectedNodes.length} shapes` : selected.length === 1 ? chosenNode?.kind.replace('rectangle', 'Shape') ?? 'Connector' : `${selected.length} selected`}</span>{chosenNode && chosenNode.kind !== 'image' && chosenNode.kind !== 'document' && chosenNode.kind !== 'video' && <><i/>{COLORS.map(color => <button key={color} className={`swatch ${chosenNode.color === color ? 'picked' : ''}`} style={{ background: color }} aria-label={`Fill ${color}`} onClick={() => { if (board) change({ ...snapshot(board), nodes: board.nodes.map(n => selected.includes(n.id) ? { ...n, color } : n) }); }}>{chosenNode.color === color && <Check size={12}/>}</button>)}</>}<i/>{selected.length === 1 && chosenNode?.video && <button className="button quiet" onClick={() => toggle(chosenNode)}>{getVideo(chosenNode.id, chosenNode.video).paused ? 'Play' : 'Pause'}</button>}{chosenNode?.kind === 'document' && <button className="button" onClick={() => openDocument(chosenNode)}>Open</button>}{selected.length === 1 && chosenNode?.kind === 'link' && chosenNode.url && <button className="button" aria-label="Open link" onClick={() => openLink(chosenNode)}><ArrowUpRight size={16}/>Open link</button>}{selectedNodes.length > 1 && !singleGroup && <button className="icon-button" title="Group (Ctrl/⌘ G)" aria-label="Group selection" onClick={() => group()}><Group size={16}/></button>}{selectedNodes.some(n => n.groupId) && <button className="icon-button" title="Ungroup (Ctrl/⌘ Shift G)" aria-label="Ungroup selection" onClick={() => group(true)}><Ungroup size={16}/></button>}{selected.length === 1 && chosenNode?.kind !== 'image' && chosenNode?.kind !== 'document' && chosenNode?.kind !== 'video' && <button className="icon-button" title="Edit text (Enter)" aria-label="Edit text" onClick={() => setEditing({ id: selected[0], text: chosenNode?.text ?? chosenEdge?.text ?? '' })}><Type size={16}/></button>}<button className="icon-button" title="Duplicate" aria-label="Duplicate selection" disabled={!chosenNode} onClick={() => { if (board) paste(selectionScene(board, selected)); }}><Copy size={15}/></button><button className="icon-button danger" title="Delete" aria-label="Delete selection" onClick={remove}><Trash2 size={16}/></button></div>}
-      {editing && editPos && <textarea ref={textInput} className="text-editor" aria-label="Shape text" maxLength={10000} value={editing.text} style={{ left: editPos.x * view.zoom + view.x, top: editPos.y * view.zoom + view.y, width: Math.max(100, editPos.width * view.zoom), height: Math.max(48, editPos.height * view.zoom), maxHeight: Math.max(48, size.height - (editPos.y * view.zoom + view.y) - 24), fontFamily: 'system-ui', fontSize: (editNode ? textSize(editNode) : 14) * view.zoom, lineHeight: 1.45, fontWeight: editNode?.kind === 'text' ? 600 : 500 }} onChange={e => setEditing({ ...editing, text: e.target.value })} onBlur={editDone} onKeyDown={e => { if (e.nativeEvent.isComposing || e.keyCode === 229) return; if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); returnToCanvas.current = true; setEditing(null); } else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); returnToCanvas.current = true; editDone(); } }}/ >}
+      {editing && editPos && editorRect && <textarea ref={textInput} className="text-editor" aria-label="Shape text" maxLength={10000} value={editing.text} style={{ left: editorRect.x, top: editorRect.y, width: editorRect.width, height: editorRect.height, padding: editNode && !detachedEditor ? 10 * view.zoom : 10, borderWidth: editNode && !detachedEditor ? 2 * view.zoom : 2, maxHeight: detachedEditor ? editorRect.height : Math.max(48, size.height - editorRect.y - 24), fontFamily: 'system-ui', fontSize: detachedEditor ? Math.max(14, textSize(editNode!) * view.zoom) : (editNode ? textSize(editNode) : 14) * view.zoom, lineHeight: 1.45, fontWeight: editNode?.kind === 'text' ? 600 : 500 }} onChange={e => setEditing({ ...editing, text: e.target.value })} onBlur={editDone} onKeyDown={e => { if (e.nativeEvent.isComposing || e.keyCode === 229) return; if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); returnToCanvas.current = true; setEditing(null); } else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); returnToCanvas.current = true; editDone(); } }}/ >}
       {layers && <aside className="layers-panel"><div className="panel-heading"><span>On this board <small>{board?.nodes.length ?? 0}</small></span><button className="icon-button" onClick={() => { setLayers(false); canvas.current?.focus(); }} aria-label="Close layers"><PanelLeftClose size={16}/></button></div><div className="layer-list" ref={layerList}>{!board?.nodes.length && <p className="empty-layers">Your ideas will show up here.</p>}{board?.nodes.map(n => <button key={n.id} className={selected.includes(n.id) ? 'selected' : ''} aria-pressed={selected.includes(n.id)} onClick={e => selectLayer(n, false, e.shiftKey)} onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); selectLayer(n, e.key === 'Enter' && !e.shiftKey, e.shiftKey, true); } }} onDoubleClick={() => selectLayer(n, true)}><span className="layer-dot" style={{ background: n.color }}/><span>{n.file?.name || n.text || n.kind}{n.groupId && <small> · grouped</small>}</span></button>)}</div></aside>}
       <div className="bottom-left"><div className="history floating"><button className="icon-button" aria-label="Undo" title="Undo (Ctrl/⌘ Z)" disabled={!undoStack.current.length} onClick={undo}><Undo2 size={17}/></button><button className="icon-button" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)" disabled={!redoStack.current.length} onClick={redo}><Redo2 size={17}/></button></div><span className="local-note"><span className="tiny-lock">○</span> Just you, your ideas, and a little space.</span></div>
       <div className="canvas-hint">{touchInput ? tool === 'connector' ? source ? 'Tap another shape to connect' : 'Tap a shape, then another to connect' : tool === 'hand' ? 'Drag to pan · Pinch to zoom' : tool === 'select' ? 'Tap a tool to draw · Two fingers to pan or pinch' : 'Tap to add · Drag to size · Two fingers to navigate' : tool === 'connector' ? source ? 'Now click the shape you want to connect to' : 'Click a shape to start a connector' : tool === 'hand' ? 'Drag to wander. There’s plenty of room.' : tool === 'select' ? 'Double-click to edit · Scroll to pan · Ctrl/⌘ + scroll to zoom' : 'Click to add · Drag to choose a size'}</div>

@@ -63,11 +63,13 @@ export function cloneScene(scene: Scene, offset: number): Scene {
     edges: scene.edges.map(e => ({ ...e, id: uid(), source: ids.get(e.source)!, target: ids.get(e.target)! })),
   };
 }
-export function resizeSelection(nodes: Shape[], ids: string[], dx: number, dy: number): Shape[] {
+export function resizeSelection(nodes: Shape[], ids: string[], dx: number, dy: number, corner = 'se'): Shape[] {
   const selected = new Set(expandSelection(nodes, ids)), members = nodes.filter(n => selected.has(n.id));
   if (!members.length) return nodes;
-  const b = bounds(members), sx = Math.max(...members.map(n => 24 / n.width), (b.width + dx) / b.width), sy = Math.max(...members.map(n => 24 / n.height), (b.height + dy) / b.height);
-  return nodes.map(n => selected.has(n.id) ? { ...n, x: b.x + (n.x - b.x) * sx, y: b.y + (n.y - b.y) * sy, width: Math.max(24, n.width * sx), height: Math.max(24, n.height * sy) } : n);
+  const b = bounds(members), west = corner.includes('w'), north = corner.includes('n');
+  const sx = Math.max(...members.map(n => 24 / n.width), (b.width + (west ? -dx : dx)) / b.width), sy = Math.max(...members.map(n => 24 / n.height), (b.height + (north ? -dy : dy)) / b.height);
+  const x = b.x + (west ? b.width * (1 - sx) : 0), y = b.y + (north ? b.height * (1 - sy) : 0);
+  return nodes.map(n => selected.has(n.id) ? { ...n, x: x + (n.x - b.x) * sx, y: y + (n.y - b.y) * sy, width: Math.max(24, n.width * sx), height: Math.max(24, n.height * sy) } : n);
 }
 type Side = 'left' | 'right' | 'top' | 'bottom';
 function anchor(n: Shape, other: Shape, offset: number, side?: Side): { p: Point; out: Point } {

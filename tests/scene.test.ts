@@ -29,6 +29,26 @@ describe('scene graph', () => {
     for (const url of ['javascript:alert(1)', 'data:text/html,hi', 'example.com', '', 42]) expect(() => parseBoard({ ...board, nodes: [{ ...node, url }] })).toThrow();
     expect(() => parseBoard({ ...board, nodes: [{ ...node, kind: 'rectangle', url: 'javascript:alert(1)' }] })).toThrow();
   });
+  it.each(['rectangle', 'ellipse', 'diamond', 'sticky', 'text', 'image', 'link'] as const)('resizes %s from every corner, anchoring the opposite corner', kind => {
+    const node = { ...shape('a', 100, 200), kind };
+    for (const corner of ['nw', 'ne', 'sw', 'se']) {
+      const west = corner.includes('w'), north = corner.includes('n');
+      const [resized] = resizeSelection([node], ['a'], west ? -30 : 30, north ? -20 : 20, corner);
+      expect(resized).toMatchObject({ x: west ? 70 : 100, y: north ? 180 : 200, width: 130, height: 100 });
+      const [small] = resizeSelection([node], ['a'], west ? 1000 : -1000, north ? 1000 : -1000, corner);
+      expect(small.width).toBe(24); expect(small.height).toBe(24);
+      expect(small.x + (west ? small.width : 0)).toBe(node.x + (west ? node.width : 0));
+      expect(small.y + (north ? small.height : 0)).toBe(node.y + (north ? node.height : 0));
+    }
+  });
+  it('ignores empty or missing resize selections and keeps connectors attached', () => {
+    const nodes = [shape('a', 0, 100), shape('b', 500, 100)];
+    expect(resizeSelection(nodes, [], 10, 20)).toBe(nodes);
+    expect(resizeSelection(nodes, ['missing'], 10, 20)).toBe(nodes);
+    const resized = resizeSelection(nodes, ['a'], 50, 0);
+    expect(resized[1]).toBe(nodes[1]);
+    expect(route({ id: 'edge', source: 'a', target: 'b', text: '' }, resized)[0]).toEqual({ x: 150, y: 140 });
+  });
   it('creates unique identifiers on HTTP origins without randomUUID', () => {
     const getRandomValues = crypto.getRandomValues.bind(crypto);
     vi.stubGlobal('crypto', { getRandomValues });
