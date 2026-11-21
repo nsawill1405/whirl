@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeShape } from '../packages/scene/src';
-import { gridSize, growText, paint, textSize, wrap } from '../apps/web/src/render';
+import { getVideo, gridSize, growText, paint, textSize, toggleVideo, videos, wrap } from '../apps/web/src/render';
 
 describe('canvas grid', () => {
   it('keeps dots visible and spacing readable across the full zoom range', () => {
@@ -28,6 +28,38 @@ describe('canvas grid', () => {
 });
 
 const ctx = { font: '', measureText: (s: string) => ({ width: s.length * 8 }) } as CanvasRenderingContext2D;
+describe('video playback', () => {
+  it('plays with sound, retries muted on rejection, and pauses', async () => {
+    const video = { src: 'data:video/webm;base64,AAAA', paused: true, muted: false, play: vi.fn().mockResolvedValue(undefined), pause: vi.fn() };
+    const data = 'data:video/webm;base64,AAAA';
+    videos.set(data, video as unknown as HTMLVideoElement);
+    try {
+      await toggleVideo(data, data); expect(video.play).toHaveBeenCalledTimes(1); expect(video.muted).toBe(false);
+      video.play.mockRejectedValueOnce(new Error('Autoplay blocked'));
+      await toggleVideo(data, data); expect(video.play).toHaveBeenCalledTimes(3); expect(video.muted).toBe(true);
+      video.paused = false; await toggleVideo(data, data); expect(video.pause).toHaveBeenCalledOnce();
+    } finally { videos.delete(data); }
+  });
+  it('handles media that cannot play even when muted', async () => {
+    const video = { src: 'data:video/webm;base64,broken', paused: true, muted: false, play: vi.fn().mockRejectedValue(new Error('Unsupported codec')) };
+    const data = 'data:video/webm;base64,broken';
+    videos.set(data, video as unknown as HTMLVideoElement);
+    try { await expect(toggleVideo(data, data)).resolves.toBeUndefined(); expect(video.play).toHaveBeenCalledTimes(2); }
+    finally { videos.delete(data); }
+  });
+  it('replaces a player when its shape id is reused for different media', () => {
+    const previous = { src: 'data:video/webm;base64,AAAA', pause: vi.fn(), removeAttribute: vi.fn(), load: vi.fn() }, replacement = { src: '' };
+    videos.set('reused-id', previous as unknown as HTMLVideoElement);
+    vi.stubGlobal('document', { createElement: vi.fn(() => replacement) });
+    try {
+      expect(getVideo('reused-id', previous.src)).toBe(previous);
+      expect(getVideo('reused-id', 'data:video/webm;base64,BBBB')).toBe(replacement);
+      expect(previous.pause).toHaveBeenCalledOnce(); expect(previous.removeAttribute).toHaveBeenCalledWith('src'); expect(previous.load).toHaveBeenCalledOnce();
+      expect(replacement.src).toBe('data:video/webm;base64,BBBB');
+      expect(getVideo('reused-id', replacement.src)).toBe(replacement);
+    } finally { videos.delete('reused-id'); vi.unstubAllGlobals(); }
+  });
+});
 describe('brainstorm text layout', () => {
   it.each([[true, '#ffffff', '#302e3e'], [true, '#eee9ff', '#eee9ff'], [true, '#fff2cc', '#fff2cc'], [false, '#ffffff', '#ffffff']] as const)('paints readable link colors in dark=%s with color %s', (dark, color, expected) => {
     const fills: string[] = [], text: string[] = [], strokes: string[] = [], context = new Proxy({ fillStyle: '', strokeStyle: '', measureText: (text: string) => ({ width: text.length * 8 }), fill() { fills.push(this.fillStyle); }, fillText() { text.push(this.fillStyle); }, stroke() { strokes.push(this.strokeStyle); } }, { get(target, key) { return key in target ? Reflect.get(target, key) : () => {}; } });

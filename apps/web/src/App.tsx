@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowDownToLine, ArrowRight, ArrowUpRight, Check, ChevronDown, Circle, Copy, Diamond, Download, FolderOpen, Hand, HelpCircle, ImagePlus, Link, Layers, Maximize, Minus, Moon, MousePointer2, MoveUpRight, Plus, Redo2, RotateCcw, Shapes, Sparkles, Square, StickyNote, Sun, Trash2, Type, Undo2, X, Github, LayoutTemplate, PanelLeftClose, Group, Ungroup } from 'lucide-react';
-import { normalizeUrl, bounds, cloneScene, COLORS, expandSelection, groupShapes, MAX_IMAGE_BYTES, MAX_DOCUMENT_BYTES, DOCUMENT_TYPES, validDocument, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, resizeSelection, route, selectionScene, uid, type Board, type Connector, type Kind, type Point, type Scene, type Shape } from '@whirl/scene';
-import { download, growText, paint, svg, textSize, type View } from './render';
+import { normalizeUrl, bounds, cloneScene, COLORS, expandSelection, groupShapes, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_DOCUMENT_BYTES, DOCUMENT_TYPES, validDocument, edgeMiddle, hitEdge, hitNode, makeShape, parseBoard, resizeSelection, route, selectionScene, uid, type Board, type Connector, type Kind, type Point, type Scene, type Shape } from '@whirl/scene';
+import { readyVideo, retainGifs, getVideo, toggleVideo, videos, download, growText, paint, svg, textSize, type View } from './render';
 import { template } from './templates';
 import { loadActiveBoard, loadBoards, saveActiveBoard, saveBoards } from './storage';
 import { documentThumbnail } from './documents';
@@ -23,6 +23,7 @@ const toolList = [
   { id: 'sticky', icon: StickyNote, label: 'Sticky note', key: 'S' }, { id: 'text', icon: Type, label: 'Text', key: 'T' },
 ] as const;
 const shortcuts: Record<string, Tool> = { v: 'select', h: 'hand', r: 'rectangle', o: 'ellipse', d: 'diamond', c: 'connector', s: 'sticky', t: 'text' };
+const CLIPBOARD_MARKER = 'whirl:copied-shapes';
 const snapshot = (b: Scene): Scene => ({ nodes: b.nodes, edges: b.edges });
 
 export default function App() {
@@ -42,8 +43,9 @@ export default function App() {
   const [size, setSize] = useState({ width: 1200, height: 800 });
   const board = boards.find(b => b.id === active), latest = useRef(board); latest.current = board;
   const drag = useRef<Drag | null>(null), undoStack = useRef<Scene[]>([]), redoStack = useRef<Scene[]>([]), clipboard = useRef<Scene | null>(null);
-  const clipboardMarker = useRef(''), pendingPaste = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pasteCount = useRef(0), nudging = useRef(false);
+  const [mediaRevision, setMediaRevision] = useState(0);
+  const toggle = useCallback((node: Shape) => { if (node.video) void toggleVideo(node.id, node.video).then(() => setMediaRevision(v => v + 1)); }, []);
   const images = useRef(new Map<string, HTMLImageElement>()), saveQueue = useRef(Promise.resolve());
   const touches = useRef(new Map<number, Point>()), gesture = useRef<Gesture | null>(null), touchStart = useRef<TouchStart | null>(null);
   const [touchInput, setTouchInput] = useState(() => navigator.maxTouchPoints > 0);
@@ -95,7 +97,7 @@ export default function App() {
   const undo = useCallback(() => { if (!latest.current) return; const scene = undoStack.current.pop(); if (!scene) return; redoStack.current.push(snapshot(latest.current)); updateScene(scene); setSelected([]); setEditing(null); renderHistory(v => v + 1); }, [updateScene]);
   const redo = useCallback(() => { if (!latest.current) return; const scene = redoStack.current.pop(); if (!scene) return; undoStack.current.push(snapshot(latest.current)); updateScene(scene); setSelected([]); renderHistory(v => v + 1); }, [updateScene]);
   const remove = useCallback(() => { const b = latest.current; if (!b || !selected.length) return; change({ nodes: b.nodes.filter(n => !selected.includes(n.id)), edges: b.edges.filter(e => !selected.includes(e.id) && !selected.includes(e.source) && !selected.includes(e.target)) }); setSelected([]); }, [change, selected]);
-  const copy = useCallback(() => { const b = latest.current; if (!b) return; const scene = selectionScene(b, selected); if (!scene.nodes.length) return; clipboard.current = scene; clipboardMarker.current = `whirl:${uid()}`; void navigator.clipboard?.writeText(clipboardMarker.current).catch(() => {}); pasteCount.current = 0; notify('Copied. Paste anywhere on your board.'); }, [notify, selected]);
+  const copy = useCallback(() => { const b = latest.current; if (!b) return; const scene = selectionScene(b, selected); if (!scene.nodes.length) return; clipboard.current = scene; pasteCount.current = 0; notify('Copied. Paste anywhere on your board.'); return true; }, [notify, selected]);
   const paste = useCallback((duplicate?: Scene) => { const scene = duplicate ?? clipboard.current, b = latest.current; if (!b || !scene?.nodes.length) return; const { nodes, edges } = cloneScene(scene, 32 * (duplicate ? 1 : ++pasteCount.current)); change({ nodes: [...b.nodes, ...nodes], edges: [...b.edges, ...edges] }); setSelected(nodes.map(n => n.id)); canvas.current?.focus(); }, [change]);
   const addLink = useCallback((input: string, point?: Point) => {
     const url = normalizeUrl(input), b = latest.current;
@@ -106,16 +108,6 @@ export default function App() {
     change({ ...snapshot(b), nodes: [...b.nodes, n] }); setSelected([n.id]); setTool('select'); setLinkInput(null); canvas.current?.focus(); return true;
   }, [change, notify, size, view]);
   const openLink = (n: Shape) => { const url = n.url && normalizeUrl(n.url); if (url) window.open(url, '_blank', 'noopener,noreferrer'); };
-  useEffect(() => {
-    const handler = (e: ClipboardEvent) => {
-      if (editing || modal || linkInput !== null || (e.target as HTMLElement).closest('input,textarea,[contenteditable=true]')) return;
-      if (pendingPaste.current) { clearTimeout(pendingPaste.current); pendingPaste.current = null; }
-      const value = e.clipboardData?.getData('text/plain') ?? '';
-      if (clipboard.current?.nodes.length && (!value || value === clipboardMarker.current || value.startsWith('whirl:'))) { e.preventDefault(); paste(); return; }
-      if (normalizeUrl(value)) { e.preventDefault(); addLink(value); }
-    };
-    window.addEventListener('paste', handler); return () => { window.removeEventListener('paste', handler); if (pendingPaste.current) { clearTimeout(pendingPaste.current); pendingPaste.current = null; } };
-  }, [addLink, paste, editing, modal, linkInput]);
   const group = useCallback((ungroup = false) => { const b = latest.current; if (!b) return; const ids = expandSelection(b.nodes, selected), members = b.nodes.filter(n => ids.includes(n.id)); if (ungroup ? !members.some(n => n.groupId) : members.length < 2 || members.every(n => n.groupId && n.groupId === members[0].groupId)) return; change({ ...snapshot(b), nodes: groupShapes(b.nodes, ids, ungroup) }); setSelected(ids); canvas.current?.focus(); }, [change, selected]);
   const chooseTool = (next: Tool) => { setTool(next); setEditing(null); setSource(null); setSelected([]); canvas.current?.focus(); };
   useEffect(() => { if (layers) layerList.current?.querySelector('button')?.focus(); }, [layers]);
@@ -126,15 +118,11 @@ export default function App() {
       if (modal) { if (e.key === 'Escape') setModal(null); return; }
       const cmd = e.metaKey || e.ctrlKey, key = e.key.toLowerCase();
       if (e.altKey) return;
-      if (cmd && ['z','y','c','v','d','a','s','g'].includes(key)) {
-        if (key === 'v') {
-          if (pendingPaste.current) clearTimeout(pendingPaste.current);
-          if (clipboard.current?.nodes.length) pendingPaste.current = setTimeout(() => { pendingPaste.current = null; paste(); }, 0);
-          return;
-        }
+      if (cmd && ['z','y','d','a','s','g'].includes(key)) {
         e.preventDefault();
-        if (key === 'z') e.shiftKey ? redo() : undo(); else if (key === 'y') redo(); else if (key === 'c') copy(); else if (key === 'g') group(e.shiftKey); else if (key === 'a') setSelected(latest.current?.nodes.map(n => n.id) ?? []); else if (key === 'd') { const b = latest.current; if (b) paste(selectionScene(b, selected)); } else notify('Your boards save automatically on this device.');
+        if (key === 'z') e.shiftKey ? redo() : undo(); else if (key === 'y') redo(); else if (key === 'g') group(e.shiftKey); else if (key === 'a') setSelected(latest.current?.nodes.map(n => n.id) ?? []); else if (key === 'd') { const b = latest.current; if (b) paste(selectionScene(b, selected)); } else notify('Your boards save automatically on this device.');
       } else if (cmd) return;
+      else if (e.key === ' ' && selected.length === 1 && latest.current?.nodes.find(n => n.id === selected[0])?.video && !(e.target as HTMLElement).closest('button,a,select')) { e.preventDefault(); if (!e.repeat) toggle(latest.current.nodes.find(n => n.id === selected[0])!); }
       else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(); }
       else if (e.key === 'Escape') { setSelected([]); setTool('select'); setSource(null); setExportOpen(false); }
       else if (key === '1') fit();
@@ -142,7 +130,7 @@ export default function App() {
       else if (key === 'l') { setLayers(value => !value); if (layers) canvas.current?.focus(); }
       else if (e.key === 'Enter' && !(e.target as HTMLElement).closest('button,a,select')) {
         const b = latest.current; if (!b) return;
-        if (selected.length === 1) { const item = b.nodes.find(n => n.id === selected[0]) ?? b.edges.find(n => n.id === selected[0]); if (item && !('kind' in item && (item.kind === 'image' || item.kind === 'document' || item.groupId))) { e.preventDefault(); setEditing({ id: item.id, text: item.text }); } }
+        if (selected.length === 1) { const item = b.nodes.find(n => n.id === selected[0]) ?? b.edges.find(n => n.id === selected[0]); if (item && !('kind' in item && (item.kind === 'image' || item.kind === 'video' || item.kind === 'document' || item.groupId))) { e.preventDefault(); setEditing({ id: item.id, text: item.text }); } }
         else if (tool !== 'select' && tool !== 'hand' && tool !== 'connector' && tool !== 'image') { e.preventDefault(); const n = fitText(makeShape(tool, 0, 0)); n.x = (size.width / 2 - view.x) / view.zoom - n.width / 2; n.y = (size.height / 2 - view.y) / view.zoom - n.height / 2; change({ ...snapshot(b), nodes: [...b.nodes, n] }); setSelected([n.id]); setTool('select'); if (n.kind === 'sticky' || n.kind === 'text') setEditing({ id: n.id, text: n.text }); }
       }
       else if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key) && selected.length) { const b = latest.current; if (b?.nodes.some(n => selected.includes(n.id))) { e.preventDefault(); if (!e.repeat || !nudging.current) remember(); nudging.current = true; updateScene({ ...snapshot(b), nodes: b.nodes.map(n => selected.includes(n.id) ? { ...n, x: n.x + (e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0) * (e.shiftKey ? 10 : 1), y: n.y + (e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0) * (e.shiftKey ? 10 : 1) } : n) }); } }
@@ -161,14 +149,22 @@ export default function App() {
     };
     for (const n of board.nodes) if (n.image) {
       let img = images.current.get(n.image);
-      if (!img) { img = new Image(); images.current.set(n.image, img); img.src = n.image; }
+      if (!img) { img = new Image(); img.style.cssText = 'position:fixed;left:-10000px;top:0;pointer-events:none'; img.setAttribute('aria-hidden', 'true'); document.body.append(img); images.current.set(n.image, img); img.src = n.image; }
       if (!img.complete) img.onload = draw;
     }
     let alive = true;
     for (const n of board.nodes) if (n.file) { let img = images.current.get(n.file.data); if (!img) { img = new Image(); images.current.set(n.file.data, img); const thumbnail = img; void documentThumbnail(n.file).then(result => { thumbnail.src = result.src; }).catch(() => {}); } img.onload = () => { if (alive) draw(); }; }
-    draw();
-    return () => { alive = false; for (const img of images.current.values()) img.onload = null; };
-  }, [board, view, size, selected, dark, source, pointer, marquee]);
+    const activeImages = new Set(board.nodes.flatMap(n => n.image ? [n.image] : n.file ? [n.file.data] : [])), activeVideos = new Set(board.nodes.flatMap(n => n.video ? [n.id] : []));
+    retainGifs(activeImages);
+    for (const [data, img] of images.current) if (!activeImages.has(data)) { img.remove(); images.current.delete(data); }
+    for (const [id, video] of videos) if (!activeVideos.has(id)) { video.pause(); video.removeAttribute('src'); video.load(); videos.delete(id); }
+    for (const n of board.nodes.filter(n => n.video)) { const video = getVideo(n.id, n.video!); video.onloadeddata = draw; video.onseeked = draw; }
+    const animated = board.nodes.some(n => n.video || n.image?.startsWith('data:image/gif;'));
+    let frame = 0;
+    const tick = () => { draw(); frame = requestAnimationFrame(tick); };
+    if (animated) frame = requestAnimationFrame(tick); else draw();
+    return () => { alive = false; cancelAnimationFrame(frame); for (const video of videos.values()) { video.onloadeddata = null; video.onseeked = null; } for (const img of images.current.values()) img.onload = null; };
+  }, [board, view, size, selected, dark, source, pointer, marquee, mediaRevision]);
   useLayoutEffect(() => { if (editing) { textInput.current?.focus(); textInput.current?.select(); } else if (returnToCanvas.current) { returnToCanvas.current = false; canvas.current?.focus(); } }, [editing?.id]);
   const screenPoint = (e: ReactPointerEvent) => { const r = canvas.current!.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const world = (p: Point) => ({ x: (p.x - view.x) / view.zoom, y: (p.y - view.y) / view.zoom });
@@ -280,7 +276,7 @@ export default function App() {
     const open = !n.groupId && (edit || (size.width <= 700 && !extend && !keepOpen)), unit = expandSelection(board?.nodes ?? [], [n.id]);
     setSelected(ids => extend ? ids.includes(n.id) ? ids.filter(id => !unit.includes(id)) : [...new Set([...ids, ...unit])] : unit); setTool('select'); setSource(null);
     if (open && n.kind === 'document') openDocument(n);
-    if (open) { setLayers(false); if (n.kind !== 'image' && n.kind !== 'document') setEditing({ id: n.id, text: n.text }); }
+    if (open) { setLayers(false); if (n.kind !== 'image' && n.kind !== 'document' && n.kind !== 'video') setEditing({ id: n.id, text: n.text }); }
     reveal(n, open);
   };
   const newBoard = (kind: 'blank' | 'welcome' | 'flowchart' | 'retro') => { editDone(); const b = template(kind); setBoards(list => [b, ...list]); setActive(b.id); setModal(null); };
@@ -293,19 +289,46 @@ export default function App() {
         const data = await new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.onerror = reject; r.readAsDataURL(new Blob([file], { type })); });
         const attachment = { name: file.name, type, size: file.size, data }; if (!validDocument(attachment)) throw new Error('Unsupported document.');
         const landscape = ['ppt', 'pptx', 'odp'].includes(ext), width = landscape ? 360 : 240, height = landscape ? 250 : 330, n = { ...makeShape('document', point.x - width / 2, point.y - height / 2), width, height, file: attachment }; const b = latest.current; if (!b) return; change({ ...snapshot(b), nodes: [...b.nodes, n] }); setSelected([n.id]);
-      } else if (file.type.startsWith('image/')) {
-        if (file.size > MAX_IMAGE_BYTES) throw new Error('Choose an image smaller than 12 MB.');
-        if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Use a PNG, JPEG, or WebP image.');
+      } else if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+        const isVideo = file.type.startsWith('video/');
+        if (isVideo && file.size > MAX_VIDEO_BYTES) throw new Error('Choose a video smaller than 25 MB.');
+        if (!isVideo && file.size > MAX_IMAGE_BYTES) throw new Error('Choose an image smaller than 12 MB.');
+        if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/ogg'].includes(file.type)) throw new Error('Use PNG, JPEG, WebP, GIF, MP4, WebM, or Ogg media.');
         const data = await new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.onerror = reject; r.readAsDataURL(file); });
-        const img = new Image(); img.src = data; await img.decode(); const scale = Math.min(1, 440 / Math.max(img.width, img.height)); const n = { ...makeShape('image', point.x, point.y), width: Math.max(48, img.width * scale), height: Math.max(40, img.height * scale), image: data }; const b = latest.current!; change({ ...snapshot(b), nodes: [...b.nodes, n] }); setSelected([n.id]);
-      } else { if (ext !== 'json') throw new Error('Unsupported file. Choose an image, document, or Whirl JSON board.'); const b = parseBoard(JSON.parse(await file.text())); setBoards(list => [b, ...list]); setActive(b.id); notify('Board imported. Make yourself at home.'); }
+        const media = makeShape(isVideo ? 'video' : 'image', point.x, point.y);
+        let width: number, height: number;
+        if (isVideo) { const video = document.createElement('video'); video.loop = true; video.playsInline = true; video.preload = 'auto'; video.src = data; await readyVideo(video); videos.set(media.id, video); width = video.videoWidth; height = video.videoHeight; }
+        else { const img = new Image(); img.src = data; await img.decode(); width = img.width; height = img.height; }
+        const scale = Math.max(24 / Math.min(width, height), Math.min(1, 440 / Math.max(width, height))); const n = { ...media, width: width * scale, height: height * scale, ...(isVideo ? { video: data } : { image: data }) }; const b = latest.current!; change({ ...snapshot(b), nodes: [...b.nodes, n] }); setSelected([n.id]);
+      } else { if (ext !== 'json') throw new Error('Unsupported file. Choose media, a document, or a Whirl JSON board.'); const b = parseBoard(JSON.parse(await file.text())); setBoards(list => [b, ...list]); setActive(b.id); notify('Board imported. Make yourself at home.'); }
       setModal(null);
     } catch (err) { notify(err instanceof Error ? err.message : 'Could not open this file.'); }
   };
   const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const copyShapes = (event: ClipboardEvent) => {
+      if (event.defaultPrevented || editing || modal || linkInput !== null || !event.clipboardData || (event.target as HTMLElement).closest('input,textarea,[contenteditable=true]')) return;
+      if (copy()) { event.preventDefault(); event.clipboardData.setData('text/plain', CLIPBOARD_MARKER); }
+    };
+    const pasteMedia = (event: ClipboardEvent) => {
+      if (event.defaultPrevented || editing || modal || linkInput !== null || (event.target as HTMLElement).closest('input,textarea,[contenteditable=true]')) return;
+      const file = Array.from(event.clipboardData?.files ?? []).find(file => /^(image|video)\//.test(file.type) || DOCUMENT_TYPES[file.name.split('.').pop()!.toLowerCase()]);
+      event.preventDefault();
+      const value = (event.clipboardData?.getData('text/uri-list') || event.clipboardData?.getData('text/plain') || '').trim();
+      if (value === CLIPBOARD_MARKER) paste();
+      else if (file) void importFile(file);
+      else if (normalizeUrl(value)) addLink(value);
+      else if (!value) paste();
+    };
+    const allowDrop = (event: DragEvent) => event.preventDefault();
+    const element = area.current;
+    window.addEventListener('copy', copyShapes); window.addEventListener('paste', pasteMedia); element?.addEventListener('dragover', allowDrop);
+    return () => { window.removeEventListener('copy', copyShapes); window.removeEventListener('paste', pasteMedia); element?.removeEventListener('dragover', allowDrop); };
+  });
   const exportBoard = async (format: 'svg' | 'png' | 'json', onlySelection = false) => {
     if (!board) return;
     const scene = onlySelection ? selectionScene(board, selected) : snapshot(board);
+    if (format !== 'json') { try { await Promise.all(scene.nodes.flatMap(n => n.video ? [readyVideo(getVideo(n.id, n.video))] : [])); } catch { notify('Could not decode a video for export. Export JSON to keep the original.'); return; } }
     setExportOpen(false); const name = (board.title.replace(/[^a-z0-9_-]+/gi, '-').slice(0, 100) || 'whirl-board') + (onlySelection ? '-selection' : '');
     if (format === 'json') download(new Blob([JSON.stringify({ ...board, ...scene, format: 'whirl', version: 1 }, null, 2)], { type: 'application/json' }), `${name}.whirl.json`);
     else if (format === 'svg') download(new Blob([svg(scene)], { type: 'image/svg+xml' }), `${name}.svg`);
@@ -322,13 +345,13 @@ export default function App() {
       <div className="header-actions"><button className="button quiet boards-button" aria-label="My boards" title="My boards" onClick={() => setModal('boards')}><FolderOpen size={16}/><span>My boards</span></button><a className="icon-button github-link" href="https://github.com/nsawill1405/whirl" target="_blank" rel="noreferrer" aria-label="Whirl on GitHub"><Github size={18}/></a><span className="header-divider"/><div className="export-wrap"><button className="button primary" aria-expanded={exportOpen} onClick={() => setExportOpen(v => !v)}><ArrowUpRight size={16}/><span>Export</span><ChevronDown size={13}/></button>{exportOpen && <div className="dropdown export-menu"><div className="menu-label">Take your ideas with you</div>{(['png','svg','json'] as const).map(f => <button key={f} onClick={() => exportBoard(f)}><Download size={16}/><span>{f === 'json' ? 'Whirl board' : `${f.toUpperCase()} image`}<small>{f === 'json' ? 'Editable backup · .json' : f === 'svg' ? 'Crisp at any size' : 'Ready to share'}</small></span><span className="file-kind">{f.toUpperCase()}</span></button>)}{selectedNodes.length > 0 && <><div className="menu-label">Selected shapes only</div>{(['png','svg','json'] as const).map(f => <button key={`selection-${f}`} onClick={() => exportBoard(f, true)}><Download size={16}/><span>Selection as {f.toUpperCase()}<small>{f === 'json' ? 'Editable group backup' : 'Only your selected shapes'}</small></span></button>)}</>}</div>}</div></div>
     </header>
     <main className="workspace" ref={area}>
-      <canvas ref={canvas} className={`board-canvas tool-${tool}`} style={{ width: size.width, height: size.height }} tabIndex={0} aria-label={`Whiteboard: ${board?.title ?? 'Loading'}. ${board?.nodes.length ?? 0} shapes. Use the toolbar to add shapes. Open Layers for keyboard selection.`} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(), p = world({ x: e.clientX - r.left, y: e.clientY - r.top }); if (e.dataTransfer.files.length) { void (async () => { for (const file of Array.from(e.dataTransfer.files)) await importFile(file, p); })(); } else { const value = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')).trim(); if (value) addLink(value, p); } }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} onDoubleClick={e => { if (!board || tool !== 'select') return; const r = canvas.current!.getBoundingClientRect(), p = world({ x: e.clientX - r.left, y: e.clientY - r.top }), n = hitNode(board.nodes, p), item = n ?? hitEdge(board.edges, board.nodes, p); if (n?.kind === 'document') { openDocument(n); return; } if (item && !('kind' in item && (item.kind === 'image' || item.kind === 'document' || item.groupId))) { setSelected([item.id]); setEditing({ id: item.id, text: item.text }); } }}/>
+      <canvas ref={canvas} className={`board-canvas tool-${tool}`} style={{ width: size.width, height: size.height }} tabIndex={0} aria-label={`Whiteboard: ${board?.title ?? 'Loading'}. ${board?.nodes.length ?? 0} shapes. Use the toolbar to add shapes. Open Layers for keyboard selection.`} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(), p = world({ x: e.clientX - r.left, y: e.clientY - r.top }); if (e.dataTransfer.files.length) { void (async () => { for (const file of Array.from(e.dataTransfer.files)) await importFile(file, p); })(); } else { const value = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')).trim(); if (value) addLink(value, p); } }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} onDoubleClick={e => { if (!board || tool !== 'select') return; const r = canvas.current!.getBoundingClientRect(), p = world({ x: e.clientX - r.left, y: e.clientY - r.top }), n = hitNode(board.nodes, p), item = n ?? hitEdge(board.edges, board.nodes, p); if (n?.video) { setSelected(expandSelection(board.nodes, [n.id])); toggle(n); return; } if (n?.kind === 'document') { openDocument(n); return; } if (item && !('kind' in item && (item.kind === 'image' || item.kind === 'document' || item.groupId))) { setSelected([item.id]); setEditing({ id: item.id, text: item.text }); } }}/>
       <div className="workspace-heading"><span className="eyebrow">YOUR SPACE TO THINK</span><p>Make room for a little possibility.</p></div>
       <div className="canvas-actions"><button className="button floating" onClick={() => newBoard('blank')}><Plus size={16}/><span>New board</span></button><button className="button floating" onClick={() => setModal('templates')}><LayoutTemplate size={16}/><span>Templates</span></button><button className={`icon-button floating ${layers ? 'active' : ''}`} onClick={() => setLayers(v => !v)} aria-label="Toggle layers" aria-expanded={layers}><Layers size={17}/></button></div>
       <nav className="toolbar" aria-label="Drawing tools"><div className="tool-group">{toolList.map(({ id, icon: Icon, label, key }, i) => <div key={id} className={i === 2 || i === 6 ? 'tool-slot divider' : 'tool-slot'}><button className={`tool ${tool === id ? 'active' : ''}`} onClick={() => chooseTool(id)} title={`${label} (${key})`} aria-label={`${label} (${key})`} aria-pressed={tool === id}><Icon size={20} strokeWidth={1.7}/><span className="tool-key">{key}</span></button></div>)}<div className="tool-slot"><button className="tool" title="Import image, document or board" aria-label="Import image or board" onClick={() => fileInput.current?.click()}><ImagePlus size={20} strokeWidth={1.7}/></button></div><div className="tool-slot"><button className="tool" title="Add link" aria-label="Add link" onClick={() => setLinkInput('')}><Link size={20} strokeWidth={1.7}/></button></div></div></nav>
       {linkInput !== null && <form className="selection-bar" aria-label="Add link" onSubmit={e => { e.preventDefault(); addLink(linkInput); }}><Link size={16}/><input autoFocus aria-label="Link URL" placeholder="https://example.com" value={linkInput} onChange={e => setLinkInput(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setLinkInput(null); canvas.current?.focus(); } }}/><button className="button" type="submit">Add</button><button className="icon-button" type="button" aria-label="Cancel link" onClick={() => setLinkInput(null)}><X size={16}/></button></form>}
-      <input type="file" hidden ref={fileInput} accept={".json,.png,.jpg,.jpeg,.webp," + Object.keys(DOCUMENT_TYPES).map(ext => "." + ext).join(",")} aria-label="Import file" onChange={e => { void importFile(e.target.files?.[0]); e.target.value = ''; }}/>
-      {linkInput === null && selected.length > 0 && (size.width > 700 || !layers) && <div className="selection-bar"><span>{singleGroup ? `Group · ${selectedNodes.length} shapes` : selected.length === 1 ? chosenNode?.kind.replace('rectangle', 'Shape') ?? 'Connector' : `${selected.length} selected`}</span>{chosenNode && chosenNode.kind !== 'image' && chosenNode.kind !== 'document' && <><i/>{COLORS.map(color => <button key={color} className={`swatch ${chosenNode.color === color ? 'picked' : ''}`} style={{ background: color }} aria-label={`Fill ${color}`} onClick={() => { if (board) change({ ...snapshot(board), nodes: board.nodes.map(n => selected.includes(n.id) ? { ...n, color } : n) }); }}>{chosenNode.color === color && <Check size={12}/>}</button>)}</>}<i/>{chosenNode?.kind === 'document' && <button className="button" onClick={() => openDocument(chosenNode)}>Open</button>}{selected.length === 1 && chosenNode?.kind === 'link' && chosenNode.url && <button className="button" aria-label="Open link" onClick={() => openLink(chosenNode)}><ArrowUpRight size={16}/>Open link</button>}{selectedNodes.length > 1 && !singleGroup && <button className="icon-button" title="Group (Ctrl/⌘ G)" aria-label="Group selection" onClick={() => group()}><Group size={16}/></button>}{selectedNodes.some(n => n.groupId) && <button className="icon-button" title="Ungroup (Ctrl/⌘ Shift G)" aria-label="Ungroup selection" onClick={() => group(true)}><Ungroup size={16}/></button>}{selected.length === 1 && chosenNode?.kind !== 'image' && chosenNode?.kind !== 'document' && <button className="icon-button" title="Edit text (Enter)" aria-label="Edit text" onClick={() => setEditing({ id: selected[0], text: chosenNode?.text ?? chosenEdge?.text ?? '' })}><Type size={16}/></button>}<button className="icon-button" title="Duplicate" aria-label="Duplicate selection" disabled={!chosenNode} onClick={() => { if (board) paste(selectionScene(board, selected)); }}><Copy size={15}/></button><button className="icon-button danger" title="Delete" aria-label="Delete selection" onClick={remove}><Trash2 size={16}/></button></div>}
+      <input type="file" hidden ref={fileInput} accept={".json,.png,.jpg,.jpeg,.webp,image/gif,video/mp4,video/webm,video/ogg," + Object.keys(DOCUMENT_TYPES).map(ext => "." + ext).join(",")} aria-label="Import file" onChange={e => { void importFile(e.target.files?.[0]); e.target.value = ''; }}/>
+      {linkInput === null && selected.length > 0 && (size.width > 700 || !layers) && <div className="selection-bar"><span>{singleGroup ? `Group · ${selectedNodes.length} shapes` : selected.length === 1 ? chosenNode?.kind.replace('rectangle', 'Shape') ?? 'Connector' : `${selected.length} selected`}</span>{chosenNode && chosenNode.kind !== 'image' && chosenNode.kind !== 'document' && chosenNode.kind !== 'video' && <><i/>{COLORS.map(color => <button key={color} className={`swatch ${chosenNode.color === color ? 'picked' : ''}`} style={{ background: color }} aria-label={`Fill ${color}`} onClick={() => { if (board) change({ ...snapshot(board), nodes: board.nodes.map(n => selected.includes(n.id) ? { ...n, color } : n) }); }}>{chosenNode.color === color && <Check size={12}/>}</button>)}</>}<i/>{selected.length === 1 && chosenNode?.video && <button className="button quiet" onClick={() => toggle(chosenNode)}>{getVideo(chosenNode.id, chosenNode.video).paused ? 'Play' : 'Pause'}</button>}{chosenNode?.kind === 'document' && <button className="button" onClick={() => openDocument(chosenNode)}>Open</button>}{selected.length === 1 && chosenNode?.kind === 'link' && chosenNode.url && <button className="button" aria-label="Open link" onClick={() => openLink(chosenNode)}><ArrowUpRight size={16}/>Open link</button>}{selectedNodes.length > 1 && !singleGroup && <button className="icon-button" title="Group (Ctrl/⌘ G)" aria-label="Group selection" onClick={() => group()}><Group size={16}/></button>}{selectedNodes.some(n => n.groupId) && <button className="icon-button" title="Ungroup (Ctrl/⌘ Shift G)" aria-label="Ungroup selection" onClick={() => group(true)}><Ungroup size={16}/></button>}{selected.length === 1 && chosenNode?.kind !== 'image' && chosenNode?.kind !== 'document' && chosenNode?.kind !== 'video' && <button className="icon-button" title="Edit text (Enter)" aria-label="Edit text" onClick={() => setEditing({ id: selected[0], text: chosenNode?.text ?? chosenEdge?.text ?? '' })}><Type size={16}/></button>}<button className="icon-button" title="Duplicate" aria-label="Duplicate selection" disabled={!chosenNode} onClick={() => { if (board) paste(selectionScene(board, selected)); }}><Copy size={15}/></button><button className="icon-button danger" title="Delete" aria-label="Delete selection" onClick={remove}><Trash2 size={16}/></button></div>}
       {editing && editPos && <textarea ref={textInput} className="text-editor" aria-label="Shape text" maxLength={10000} value={editing.text} style={{ left: editPos.x * view.zoom + view.x, top: editPos.y * view.zoom + view.y, width: Math.max(100, editPos.width * view.zoom), height: Math.max(48, editPos.height * view.zoom), maxHeight: Math.max(48, size.height - (editPos.y * view.zoom + view.y) - 24), fontFamily: 'system-ui', fontSize: (editNode ? textSize(editNode) : 14) * view.zoom, lineHeight: 1.45, fontWeight: editNode?.kind === 'text' ? 600 : 500 }} onChange={e => setEditing({ ...editing, text: e.target.value })} onBlur={editDone} onKeyDown={e => { if (e.nativeEvent.isComposing || e.keyCode === 229) return; if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); returnToCanvas.current = true; setEditing(null); } else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); returnToCanvas.current = true; editDone(); } }}/ >}
       {layers && <aside className="layers-panel"><div className="panel-heading"><span>On this board <small>{board?.nodes.length ?? 0}</small></span><button className="icon-button" onClick={() => { setLayers(false); canvas.current?.focus(); }} aria-label="Close layers"><PanelLeftClose size={16}/></button></div><div className="layer-list" ref={layerList}>{!board?.nodes.length && <p className="empty-layers">Your ideas will show up here.</p>}{board?.nodes.map(n => <button key={n.id} className={selected.includes(n.id) ? 'selected' : ''} aria-pressed={selected.includes(n.id)} onClick={e => selectLayer(n, false, e.shiftKey)} onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); selectLayer(n, e.key === 'Enter' && !e.shiftKey, e.shiftKey, true); } }} onDoubleClick={() => selectLayer(n, true)}><span className="layer-dot" style={{ background: n.color }}/><span>{n.file?.name || n.text || n.kind}{n.groupId && <small> · grouped</small>}</span></button>)}</div></aside>}
       <div className="bottom-left"><div className="history floating"><button className="icon-button" aria-label="Undo" title="Undo (Ctrl/⌘ Z)" disabled={!undoStack.current.length} onClick={undo}><Undo2 size={17}/></button><button className="icon-button" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)" disabled={!redoStack.current.length} onClick={redo}><Redo2 size={17}/></button></div><span className="local-note"><span className="tiny-lock">○</span> Just you, your ideas, and a little space.</span></div>

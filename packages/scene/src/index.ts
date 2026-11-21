@@ -1,7 +1,7 @@
 export type Point = { x: number; y: number };
-export type Kind = 'rectangle' | 'ellipse' | 'diamond' | 'sticky' | 'text' | 'image' | 'link' | 'document';
+export type Kind = 'rectangle' | 'ellipse' | 'diamond' | 'sticky' | 'text' | 'image' | 'video' | 'link' | 'document';
 export type DocumentFile = { name: string; type: string; size: number; data: string };
-export type Shape = Point & { id: string; kind: Kind; width: number; height: number; text: string; color: string; image?: string; url?: string; file?: DocumentFile; groupId?: string };
+export type Shape = Point & { id: string; kind: Kind; width: number; height: number; text: string; color: string; image?: string; video?: string; url?: string; file?: DocumentFile; groupId?: string };
 export type Connector = { id: string; source: string; target: string; text: string };
 export type Board = { id: string; title: string; nodes: Shape[]; edges: Connector[]; updatedAt: number };
 export type Scene = Pick<Board, 'nodes' | 'edges'>;
@@ -17,6 +17,8 @@ export function validDocument(file: DocumentFile) {
   return !!type && type === file.type && file.data.startsWith(`data:${type};base64,`) && file.data.length <= Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4 + 160 && body.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(body);
 }
 export const MAX_IMAGE_DATA_LENGTH = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64;
+export const MAX_VIDEO_BYTES = 25_000_000;
+export const MAX_VIDEO_DATA_LENGTH = Math.ceil(MAX_VIDEO_BYTES / 3) * 4 + 64;
 export function normalizeUrl(input: string): string | null {
   const value = input.trim();
   if (!value || /\s/.test(value)) return null;
@@ -164,7 +166,8 @@ export function parseBoard(input: unknown): Board {
   const ids = new Set<string>();
   for (const n of b.nodes) {
     if (n && ((n.kind === 'document' && !n.file) || (n.file !== undefined && !validDocument(n.file)))) throw new Error('The board contains an invalid document.');
-    if (!n || typeof n.id !== 'string' || ids.has(n.id) || !['rectangle','ellipse','diamond','sticky','text','image','link','document'].includes(n.kind) || ![n.x,n.y,n.width,n.height].every(v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1000000) || n.width < 24 || n.height < 24 || typeof n.text !== 'string' || n.text.length > 10000 || !/^#[\da-f]{6}$/i.test(n.color) || (n.image !== undefined && (typeof n.image !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(n.image) || n.image.length > MAX_IMAGE_DATA_LENGTH))) throw new Error('The board contains an invalid shape.');
+    if (!n || typeof n.id !== 'string' || ids.has(n.id) || !['rectangle','ellipse','diamond','sticky','text','image','video','link','document'].includes(n.kind) || ![n.x,n.y,n.width,n.height].every(v => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1000000) || n.width < 24 || n.height < 24 || typeof n.text !== 'string' || n.text.length > 10000 || !/^#[\da-f]{6}$/i.test(n.color) || (n.image !== undefined && (typeof n.image !== 'string' || !/^data:image\/(png|jpeg|webp|gif);base64,/.test(n.image) || n.image.length > MAX_IMAGE_DATA_LENGTH))) throw new Error('The board contains an invalid shape.');
+    if (n.video !== undefined && (typeof n.video !== 'string' || !/^data:video\/(mp4|webm|ogg);base64,/.test(n.video) || n.video.length > MAX_VIDEO_DATA_LENGTH)) throw new Error('The board contains an invalid video.');
     if (n.url !== undefined && (typeof n.url !== 'string' || !/^https?:\/\//i.test(n.url) || !normalizeUrl(n.url))) throw new Error('The board contains an invalid URL.');
     ids.add(n.id);
   }

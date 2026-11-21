@@ -1,7 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
-import { normalizeUrl, bounds, cloneScene, contains, edgeMiddle, expandSelection, groupShapes, hitEdge, hitNode, makeShape, parseBoard, resizeSelection, route, selectionScene, uid, type Board } from '../packages/scene/src';
+import { normalizeUrl, bounds, cloneScene, contains, edgeMiddle, expandSelection, groupShapes, hitEdge, hitNode, makeShape, MAX_IMAGE_DATA_LENGTH, MAX_VIDEO_DATA_LENGTH, parseBoard, resizeSelection, route, selectionScene, uid, type Board } from '../packages/scene/src';
 const shape = (id: string, x: number, y: number) => ({ ...makeShape('rectangle', x, y), id, width: 100, height: 80 });
 describe('scene graph', () => {
+  it.each(['image/gif', 'video/mp4', 'video/webm', 'video/ogg'])('round trips %s media', mime => {
+    const kind = mime.startsWith('video') ? 'video' : 'image';
+    const node = { ...makeShape(kind, 0, 0), [kind]: `data:${mime};base64,AAAA` };
+    expect(parseBoard({ title: 'Media', nodes: [node], edges: [] }).nodes).toEqual([node]);
+    expect(cloneScene({ nodes: [node], edges: [] }, 32).nodes[0][kind]).toBe(node[kind]);
+  });
+  it.each(['image', 'video'] as const)('rejects invalid and oversized %s data', kind => {
+    const parse = (data: unknown) => parseBoard({ title: 'Media', nodes: [{ ...makeShape(kind, 0, 0), [kind]: data }], edges: [] });
+    for (const data of ['', 42, 'data:text/html;base64,AAAA', kind === 'video' ? 'data:video/avi;base64,AAAA' : 'data:image/svg+xml;base64,AAAA', `data:${kind}/${kind === 'video' ? 'webm' : 'gif'};base64,` + 'A'.repeat(kind === 'video' ? MAX_VIDEO_DATA_LENGTH : MAX_IMAGE_DATA_LENGTH)]) expect(() => parse(data)).toThrow();
+    expect(parseBoard({ title: 'Empty', nodes: [], edges: [] }).nodes).toEqual([]);
+  });
   it('normalizes web URLs and rejects empty, malformed, and unsafe values', () => {
     expect(normalizeUrl(' example.com/x ')).toBe('https://example.com/x');
     expect(normalizeUrl('example.com:8080/notes')).toBe('https://example.com:8080/notes');
